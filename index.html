@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="theme-color" content="#0f0f0f"/>
+<link rel="manifest" href="manifest.json"/>
 <title>Studio Intelligence — Reykjavík</title>
 <script>
   const SUPABASE_URL  = 'https://zqwhcdnmxqiidstarqxt.supabase.co';
@@ -524,6 +526,7 @@ body{font-family:'Space Grotesk',sans-serif;background:#0a0a0a;color:#f0ede8;fon
       <div class="plist" id="arc-list"><div class="empty"><i class="ti ti-archive"></i>No archived projects yet.</div></div>
     </div>
     <div class="sb-foot">
+      <button id="install-btn" onclick="installApp()" style="display:none;align-items:center;gap:5px;background:none;border:0.5px solid var(--b2);border-radius:var(--r);padding:4px 9px;font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--t3);cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--redh)'" onmouseout="this.style.borderColor='var(--b2)';this.style.color='var(--t3)'"><i class="ti ti-download" style="font-size:11px"></i> Install app</button>
       <span class="sb-foot-ct"><span id="ct">0</span> sites · <span id="co-ct">0</span> companies</span>
       <span id="devpill" class="dev-pill" style="display:none">DEV</span>
     </div>
@@ -1574,6 +1577,27 @@ function resetForm(){
   document.querySelectorAll('#pri-row .pbtn-pri').forEach((b,i)=>b.classList.toggle('on',i===0));
   document.querySelectorAll('#src-row .pbtn-src').forEach((b,i)=>{b.className='pbtn pbtn-src'+(i===0?' on-official':'');});
 }
+/* ── INSTALL AS DESKTOP APP ────────────── */
+let deferredInstall=null;
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();
+  deferredInstall=e;
+  // Only offer if not already running as the installed app
+  if(!window.matchMedia('(display-mode: standalone)').matches)
+    document.getElementById('install-btn').style.display='inline-flex';
+});
+async function installApp(){
+  if(!deferredInstall)return;
+  deferredInstall.prompt();
+  const {outcome}=await deferredInstall.userChoice;
+  if(outcome==='accepted')document.getElementById('install-btn').style.display='none';
+  deferredInstall=null;
+}
+window.addEventListener('appinstalled',()=>{
+  document.getElementById('install-btn').style.display='none';
+  toast('App installed ✓');
+});
+
 function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2800);}
 
 /* ── MOBILE DRAWER ─────────────────────── */
