@@ -5,14 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Studio Intelligence — Reykjavík</title>
 <script>
-  const SUPABASE_URL  = 'YOUR_SUPABASE_URL';
-  const SUPABASE_ANON = 'YOUR_SUPABASE_ANON_KEY';
-  const DEV_MODE = true;
+  const SUPABASE_URL  = 'https://zqwhcdnmxqiidstarqxt.supabase.co';
+  const SUPABASE_ANON = 'sb_publishable_W4e9PZyuGH_Jl8iUHaRjJg_AqQ_0vIj';
+  const STUDIO_EMAIL  = 'sveinn@ask.is';
+  const DEV_MODE = false;
   const DEV_USER = 'Dev User';
-  const STAFF = {
-    admin:'studio2024',anna:'studio2024',bjorn:'studio2024',
-    dagny:'studio2024',einar:'studio2024',freyja:'studio2024',gunnar:'studio2024'
-  };
 </script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -598,8 +595,11 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('iu').value = DEV_USER;
     document.getElementById('ic').value = 'dev';
   }
-  if (!DEV_MODE && SUPABASE_URL !== 'YOUR_SUPABASE_URL')
-    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  // Restore an existing session — no re-login needed on refresh
+  if (!DEV_MODE) sb.auth.getSession().then(({data:{session}})=>{
+    if (session) go(localStorage.getItem('rvk_name')||'Studio');
+  });
   buildColorPalette();
   document.addEventListener('keydown', e => {
     if (e.key === 'Enter' && document.getElementById('auth').style.display !== 'none') login();
@@ -619,17 +619,17 @@ function buildColorPalette() {
 /* ── AUTH ──────────────────────────────── */
 async function login() {
   if (DEV_MODE) { go(document.getElementById('iu').value.trim() || DEV_USER); return; }
-  const u = document.getElementById('iu').value.trim().toLowerCase();
-  const c = document.getElementById('ic').value.trim();
-  let ok = false, displayName = '';
-  if (sb) {
-    const { data } = await sb.from('staff').select('display_name').eq('username',u).eq('access_code',c).single();
-    if (data) { ok=true; displayName=data.display_name; }
-  } else {
-    if (STAFF[u] && STAFF[u]===c) { ok=true; displayName=u.charAt(0).toUpperCase()+u.slice(1); }
-  }
-  if (!ok) { document.getElementById('aerr').style.display='block'; return; }
-  document.getElementById('aerr').style.display='none';
+  const name = document.getElementById('iu').value.trim();
+  const code = document.getElementById('ic').value.trim();
+  const errEl = document.getElementById('aerr');
+  if (!name || !code) { errEl.textContent='Enter your name and the studio access code.'; errEl.style.display='block'; return; }
+  const btn = document.querySelector('.auth-btn'); btn.disabled=true; btn.textContent='Signing in…';
+  const { error } = await sb.auth.signInWithPassword({ email: STUDIO_EMAIL, password: code });
+  btn.disabled=false; btn.textContent='Sign In';
+  if (error) { errEl.textContent='Wrong access code — check with the studio.'; errEl.style.display='block'; return; }
+  errEl.style.display='none';
+  const displayName = name.charAt(0).toUpperCase()+name.slice(1);
+  localStorage.setItem('rvk_name', displayName);
   go(displayName);
 }
 
@@ -639,11 +639,14 @@ function go(name) {
   document.getElementById('auth').style.display = 'none';
   document.getElementById('app').classList.add('on');
   if (DEV_MODE) document.getElementById('devpill').style.display = 'inline';
-  initMap(); loadArchive(); loadWon(); loadData();
+  initMap();
+  fetchAll().then(()=>{ migrateIfNeeded(); startRealtime(); });
 }
 
-function signOut() {
-  currentUser=null; projects=[]; companies=[]; markers={}; won=[]; wonMarkers=[];
+async function signOut() {
+  stopRealtime();
+  if (!DEV_MODE) { try{ await sb.auth.signOut(); }catch(e){} }
+  currentUser=null; projects=[]; companies=[]; markers={}; archived=[]; won=[]; wonMarkers=[];
   document.getElementById('app').classList.remove('on');
   document.getElementById('auth').style.display = 'flex';
   if (!DEV_MODE) { document.getElementById('iu').value=''; document.getElementById('ic').value=''; }
@@ -882,7 +885,7 @@ function saveCompany(){
   const name=document.getElementById('co-name-inp').value.trim();
   if(!name){toast('Enter a company name.');return;}
   const co={id:Date.now(),name,color:selCoColor,logo:selLogoB64||null};
-  companies.push(co);saveData();renderCompanyList();updateStats();selectCo(co.id);closeCoModal();
+  companies.push(co);dbInsertCompany(co);renderCompanyList();updateStats();selectCo(co.id);closeCoModal();
   toast(`Company "${name}" added.`);
 }
 
@@ -891,16 +894,13 @@ function saveCompany(){
 let archived = [];
 let arcFilter = 'all';
 
-function loadArchive(){
-  try{ const d=localStorage.getItem('rvk_arc');archived=d?JSON.parse(d):[]; }catch(e){archived=[];}
-}
-function saveArchive(){ try{localStorage.setItem('rvk_arc',JSON.stringify(archived));}catch(e){} }
-
 function archiveProject(id, status='archived'){
   const p=projects.find(x=>x.id===id);if(!p)return;
-  archived.unshift({...p, arc_status:status, arc_date:new Date().toISOString()});
+  const arc_date=new Date().toISOString();
+  archived.unshift({...p, arc_status:status, arc_date});
   projects=projects.filter(x=>x.id!==id);
-  saveData();saveArchive();refreshMarkers();renderProjectList();updateStats();renderArchiveList();
+  dbUpdateProject(id,{status,arc_date});
+  refreshMarkers();renderProjectList();updateStats();renderArchiveList();
   closeMini();closeFull();
   toast(status==='deleted'?'Moved to deleted archive.':'Project archived.');
 }
@@ -912,9 +912,10 @@ function deleteProject(id){
 function restoreProject(id){
   const p=archived.find(x=>x.id===id);if(!p)return;
   const {arc_status,arc_date,...proj}=p;
-  projects.unshift(proj);
+  projects.unshift({...proj,status:'active'});
   archived=archived.filter(x=>x.id!==id);
-  saveData();saveArchive();refreshMarkers();renderProjectList();updateStats();renderArchiveList();
+  dbUpdateProject(id,{status:'active',arc_date:null});
+  refreshMarkers();renderProjectList();updateStats();renderArchiveList();
   toast('Project restored ✓');
 }
 function setArcFilter(f,btn){
@@ -955,17 +956,15 @@ function renderArchiveList(subset){
 let won = [];
 let wonMarkers = [];
 
-function loadWon(){
-  try{ const d=localStorage.getItem('rvk_won');won=d?JSON.parse(d):[]; }catch(e){won=[];}
-}
-function saveWon(){ try{localStorage.setItem('rvk_won',JSON.stringify(won));}catch(e){} }
-
 function winProject(id){
   const p=projects.find(x=>x.id===id);if(!p)return;
   if(!confirm(`Mark "${p.title}" as secured? It will move to the Won tab.`))return;
-  won.unshift({...p, won_date:new Date().toISOString(), won_by:(typeof currentUser!=='undefined'&&currentUser)?currentUser:(p.added_by||'—')});
+  const won_date=new Date().toISOString();
+  const won_by=(typeof currentUser!=='undefined'&&currentUser)?currentUser:(p.added_by||'—');
+  won.unshift({...p, won_date, won_by});
   projects=projects.filter(x=>x.id!==id);
-  saveData();saveWon();refreshMarkers();refreshWonMarkers();renderProjectList();updateStats();renderWonList();
+  dbUpdateProject(id,{status:'won',won_date,won_by});
+  refreshMarkers();refreshWonMarkers();renderProjectList();updateStats();renderWonList();
   closeMini();closeFull();
   toast('Project secured ⚑');
 }
@@ -974,9 +973,10 @@ function winFromFull(){ if(currentFullId) winProject(currentFullId); }
 function unwinProject(id){
   const p=won.find(x=>x.id===id);if(!p)return;
   const {won_date,won_by,...proj}=p;
-  projects.unshift(proj);
+  projects.unshift({...proj,status:'active'});
   won=won.filter(x=>x.id!==id);
-  saveData();saveWon();refreshMarkers();refreshWonMarkers();renderProjectList();updateStats();renderWonList();
+  dbUpdateProject(id,{status:'active',won_date:null,won_by:null});
+  refreshMarkers();refreshWonMarkers();renderProjectList();updateStats();renderWonList();
   toast('Moved back to pipeline.');
 }
 function searchWon(q){
@@ -1026,14 +1026,80 @@ function refreshWonMarkers(){
   });
 }
 
-/* ── DATA ──────────────────────────────── */
-function loadData(){
-  try{const pd=localStorage.getItem('rvk_p9');projects=pd?JSON.parse(pd):[];const cd=localStorage.getItem('rvk_c9');companies=cd?JSON.parse(cd):[];}catch(e){projects=[];companies=[];}
-  if(!projects.length)seedSamples();
+/* ── DATA (Supabase) ───────────────────── */
+async function fetchAll(){
+  const [cRes,pRes]=await Promise.all([
+    sb.from('companies').select('*').order('name'),
+    sb.from('projects').select('*').order('created_at',{ascending:false})
+  ]);
+  if(cRes.error||pRes.error){
+    console.error(cRes.error||pRes.error);
+    toast('Could not load data — check your connection.');
+    return;
+  }
+  companies=cRes.data||[];
+  const rows=pRes.data||[];
+  projects=rows.filter(r=>r.status==='active');
+  archived=rows.filter(r=>r.status==='archived'||r.status==='deleted').map(r=>({...r,arc_status:r.status}));
+  won=rows.filter(r=>r.status==='won');
   renderAll();
 }
-function saveData(){
-  try{localStorage.setItem('rvk_p9',JSON.stringify(projects));localStorage.setItem('rvk_c9',JSON.stringify(companies));}catch(e){}
+
+async function dbInsertProject(p){
+  const {error}=await sb.from('projects').insert(p);
+  if(error){console.error(error);toast('Save failed — '+error.message);return false;}
+  return true;
+}
+async function dbUpdateProject(id,fields){
+  const {error}=await sb.from('projects').update(fields).eq('id',id);
+  if(error){console.error(error);toast('Save failed — '+error.message);return false;}
+  return true;
+}
+async function dbInsertCompany(co){
+  const {error}=await sb.from('companies').insert(co);
+  if(error){console.error(error);toast('Save failed — '+error.message);return false;}
+  return true;
+}
+
+/* ── REALTIME — live sync between team members ── */
+let rtChannel=null, rtTimer=null;
+function startRealtime(){
+  if(rtChannel)return;
+  rtChannel=sb.channel('studio-sync')
+    .on('postgres_changes',{event:'*',schema:'public',table:'projects'},scheduleReload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'companies'},scheduleReload)
+    .subscribe();
+}
+function stopRealtime(){ if(rtChannel){sb.removeChannel(rtChannel);rtChannel=null;} }
+function scheduleReload(){ clearTimeout(rtTimer); rtTimer=setTimeout(fetchAll,400); }
+
+/* ── ONE-TIME MIGRATION — pushes old local data (or seeds) to the DB if it's empty ── */
+async function migrateIfNeeded(){
+  if(projects.length||archived.length||won.length||companies.length)return;
+  let lp=[],lc=[],la=[],lw=[];
+  try{
+    lp=JSON.parse(localStorage.getItem('rvk_p9')||'[]');
+    lc=JSON.parse(localStorage.getItem('rvk_c9')||'[]');
+    la=JSON.parse(localStorage.getItem('rvk_arc')||'[]');
+    lw=JSON.parse(localStorage.getItem('rvk_won')||'[]');
+  }catch(e){}
+  if(!lp.length&&!lc.length){ const s=seedSamples(); lp=s.projects; lc=s.companies; }
+  const toRow=(p,status)=>({
+    id:p.id,title:p.title,address:p.address||null,notes:p.notes||null,type:p.type||null,
+    priority:p.priority||'low',source:p.source||'official',company_id:p.company_id||null,
+    lat:p.lat??null,lng:p.lng??null,files:p.files||[],comments:p.comments||[],
+    added_by:p.added_by||null,created_at:p.created_at||new Date().toISOString(),
+    status,arc_date:p.arc_date||null,won_date:p.won_date||null,won_by:p.won_by||null
+  });
+  const rows=[
+    ...lp.map(p=>toRow(p,'active')),
+    ...la.map(p=>toRow(p,p.arc_status==='deleted'?'deleted':'archived')),
+    ...lw.map(p=>toRow(p,'won'))
+  ];
+  if(lc.length){const{error}=await sb.from('companies').insert(lc.map(c=>({id:c.id,name:c.name,color:c.color||null,logo:c.logo||null})));if(error)console.error(error);}
+  if(rows.length){const{error}=await sb.from('projects').insert(rows);if(error)console.error(error);}
+  toast('Studio data is now online ✓');
+  await fetchAll();
 }
 
 async function addProject(){
@@ -1053,7 +1119,8 @@ async function addProject(){
     added_by:currentUser,
     created_at:new Date().toISOString()
   };
-  projects.unshift(p);saveData();placeMarker(p);renderAll();resetForm();
+  p.status='active';
+  projects.unshift(p);dbInsertProject(p);placeMarker(p);renderAll();resetForm();
   swTab('sites',document.querySelector('.sb-tab'));
   map.flyTo([p.lat,p.lng],15,{duration:1});
   toast('Site added ✓');
@@ -1066,7 +1133,7 @@ function addComment(projId){
   const p=projects.find(x=>x.id===projId);if(!p)return;
   if(!p.comments)p.comments=[];
   p.comments.push({id:Date.now(),text,author:currentUser,time:new Date().toISOString()});
-  saveData();ta.value='';
+  dbUpdateProject(projId,{comments:p.comments});ta.value='';
   renderComments(projId);
   toast('Comment added.');
 }
@@ -1115,7 +1182,7 @@ function saveEditLocation() {
   if(isNaN(lat)||isNaN(lng)){toast('Enter valid coordinates.');return;}
   p.lat = lat; p.lng = lng;
   if(addr) p.address = addr;
-  saveData(); refreshMarkers(); renderProjectList(); updateStats();
+  dbUpdateProject(p.id,{lat:p.lat,lng:p.lng,address:p.address}); refreshMarkers(); renderProjectList(); updateStats();
   closeEditModal();
   map.flyTo([lat,lng],16,{duration:0.8});
   if(currentFullId===p.id) openFull(p.id);
@@ -1128,7 +1195,7 @@ function boostPriority(id){
   const order=['low','medium','high','critical'];
   const i=order.indexOf(p.priority);
   if(i>=order.length-1){toast('Already critical.');return;}
-  p.priority=order[i+1];saveData();refreshMarkers();renderAll();
+  p.priority=order[i+1];dbUpdateProject(p.id,{priority:p.priority});refreshMarkers();renderAll();
   if(currentMiniId===id)openMini(p);
   if(currentFullId===id)openFull(id);
   toast('Priority → '+p.priority.toUpperCase());
@@ -1137,7 +1204,7 @@ function boostFromMini(){if(currentMiniId)boostPriority(currentMiniId);}
 function boostFromFull(){if(currentFullId)boostPriority(currentFullId);}
 function setSourceFull(src){
   const p=projects.find(x=>x.id===currentFullId);if(!p)return;
-  p.source=src;saveData();refreshMarkers();renderProjectList();
+  p.source=src;dbUpdateProject(p.id,{source:src});refreshMarkers();renderProjectList();
   openFull(currentFullId);
   toast('Source set to '+{official:'Official',unofficial:'Unconfirmed',confirmed:'Confirmed'}[src]);
 }
@@ -1150,13 +1217,13 @@ function saveFullEdits(id){
   p.title=newTitle;
   p.notes=newNotes;
   p.company_id=newCo?parseInt(newCo):null;
-  saveData();renderProjectList();updateStats();
+  dbUpdateProject(id,{title:p.title,notes:p.notes,company_id:p.company_id});renderProjectList();updateStats();
   document.getElementById('fd-edit-title').value=p.title;
   toast('Changes saved ✓');
 }
 function setPriorityFull(pri){
   const p=projects.find(x=>x.id===currentFullId);if(!p)return;
-  p.priority=pri;saveData();refreshMarkers();renderProjectList();updateStats();
+  p.priority=pri;dbUpdateProject(currentFullId,{priority:pri});refreshMarkers();renderProjectList();updateStats();
   // highlight active button
   ['low','medium','high','critical'].forEach(v=>{
     const b=document.getElementById('fdp-'+v);if(!b)return;
@@ -1167,11 +1234,6 @@ function setPriorityFull(pri){
   toast('Priority set to '+pri.toUpperCase());
 }
 
-function deleteProject(id){
-  if(!confirm('Remove this site?'))return;
-  projects=projects.filter(x=>x.id!==id);
-  saveData();refreshMarkers();renderAll();closeMini();closeFull();toast('Site removed.');
-}
 function deleteFromFull(){if(currentFullId)deleteProject(currentFullId);}
 
 /* ── MARKERS ───────────────────────────── */
@@ -1460,10 +1522,10 @@ function toast(msg){const el=document.getElementById('toast');el.textContent=msg
 
 /* ── SAMPLE DATA ───────────────────────── */
 function seedSamples(){
-  companies=[
+  const companies=[
     {id:201,name:'Bjarg',color:'#c0392b',logo:null},
   ];
-  projects=[
+  const projects=[
     {id:1,title:'Langimói 13-15 — Móahverfi, Akureyri',address:'Langimói 13-15, Akureyri',notes:'12 íbúðir. Í undirbúningi — þetta er eina verkefnið sem er í virkum undirbúningi á þessum lista. Einbýlishúsasvæði í Móahverfi, Akureyri. Eina verkefnið utan höfuðborgarsvæðisins.',type:'residential',priority:'high',source:'confirmed',company_id:201,files:[],comments:[],lat:65.6920,lng:-18.0682,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
     {id:2,title:'Rangársel — 50 íbúðir',address:'Rangársel, Reykjavík',notes:'50 íbúðir. Í bið. Rangársel er íbúðahverfi í Neðra-Breiðholti (póstnúmer 109), suðaustur Reykjavík.',type:'residential',priority:'medium',source:'confirmed',company_id:201,files:[],comments:[],lat:64.1022,lng:-21.8552,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
     {id:3,title:'Gufunes II — 60 íbúðir',address:'Gufunes, Reykjavík',notes:'60 íbúðir. Í bið. Gufunes er þróunarsvæði í norðausturhluta Reykjavíkur við Eiðsvík. Þetta er annar áfangi Bjargar á svæðinu.',type:'residential',priority:'medium',source:'confirmed',company_id:201,files:[],comments:[],lat:64.14694,lng:-21.81250,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
@@ -1478,7 +1540,7 @@ function seedSamples(){
     {id:12,title:'U-reitur — Vatnsmýrin, 50 íbúðir',address:'Vatnsmýrarvegur, Reykjavík',notes:'50 íbúðir. Í bið. Milli BSÍ rútustöðvarinnar (64.1373,-21.9344) og N1 bensínstöðvarinnar í Vatnsmýrinni. Mjög miðlæg staðsetning.',type:'mixed-use',priority:'medium',source:'confirmed',company_id:201,files:[],comments:[],lat:64.1368,lng:-21.9298,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
     {id:13,title:'Óstaðsett verkefni — 50 íbúðir',address:'Reykjavík (staðsetning óþekkt)',notes:'50 íbúðir. Í bið. Staðsetning innan Reykjavíkur hefur ekki verið gefin upp opinberlega. Merkt á miðpunkt Reykjavíkur þar til nákvæmari upplýsingar liggja fyrir.',type:'residential',priority:'low',source:'unofficial',company_id:201,files:[],comments:[],lat:64.1355,lng:-21.8954,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
   ];
-  saveData();
+  return {companies,projects};
 }
 </script>
 </body>
