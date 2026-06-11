@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>Studio Intelligence — Reykjavík</title>
 <script>
   const SUPABASE_URL  = 'https://zqwhcdnmxqiidstarqxt.supabase.co';
@@ -281,7 +281,63 @@ body{font-family:'Space Grotesk',sans-serif;background:#0a0a0a;color:#f0ede8;fon
 .leaflet-popup-close-button{color:#5e5b57!important}
 .lpu-h{font-size:13px;font-weight:500;margin-bottom:6px}
 .lpu-row{font-size:12px;color:#c0bdb8;padding:3px 4px;cursor:pointer;border-radius:4px;transition:background .1s}
-.lpu-row:hover{background:rgba(255,255,255,.06);color:#f0ede8}
+.lpu-row:hover{background:rgba(255,255,255,.06);color:#f0ede8}/* ── MOBILE (≤700px): sidebar becomes bottom drawer ── */
+#mob-fab{display:none}
+@media (max-width:700px){
+  /* Layout: map fills screen, sidebar slides up from bottom */
+  #app.on{display:block}
+  #map-area{position:fixed;inset:0;height:100dvh}
+  #sidebar{
+    position:fixed;left:0;right:0;bottom:0;top:auto;z-index:900;
+    width:100%;min-width:0;height:85dvh;
+    border-right:none;border-top:0.5px solid var(--b2);
+    border-radius:16px 16px 0 0;
+    transform:translateY(calc(100% - 96px));
+    transition:transform .28s cubic-bezier(.4,0,.2,1);
+    padding-bottom:env(safe-area-inset-bottom);
+    box-shadow:0 -8px 32px rgba(0,0,0,.5);
+  }
+  #sidebar.drawer-open{transform:translateY(0)}
+  /* Drag handle */
+  .sb-head{padding:8px 16px 10px;cursor:grab;touch-action:none}
+  .sb-head::before{
+    content:'';display:block;width:36px;height:4px;border-radius:2px;
+    background:var(--b3);margin:0 auto 10px;
+  }
+  .sb-head h2{font-size:14px}
+  /* Tabs: 5 across, bigger touch targets */
+  .sb-tab{padding:12px 2px;font-size:10px;letter-spacing:0}
+  /* Panes scroll inside the drawer */
+  .pane{max-height:none}
+  .plist,.co-list,.aform{padding-bottom:calc(28px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch}
+  /* Inputs at 16px — stops iOS auto-zoom on focus */
+  .finput,.fsel,.ftxt,.sbar input,.comment-textarea,#fd-edit-notes,#fd-edit-title{font-size:16px !important}
+  /* Map chrome */
+  #stats{display:none}
+  #map-search-bar{top:calc(10px + env(safe-area-inset-top));right:10px;left:10px;width:auto}
+  #mini-detail{top:auto;bottom:112px;right:10px;left:10px;width:auto}
+  #legend{display:none}
+  /* Full detail: bottom sheet */
+  #full-detail-overlay{padding:0;align-items:flex-end}
+  #full-detail{max-width:100%;max-height:92dvh;border-radius:16px 16px 0 0;padding-bottom:env(safe-area-inset-bottom)}
+  .fd-act{min-height:42px}
+  /* Modals fit screen */
+  .co-modal-box{width:calc(100vw - 28px)}
+  #edit-modal > div{width:calc(100vw - 28px)}
+  .auth-card{width:100%;max-width:320px;padding:0 16px}
+  /* FAB: open/close drawer */
+  #mob-fab{
+    display:flex;position:fixed;z-index:950;
+    right:14px;bottom:calc(110px + env(safe-area-inset-bottom));
+    width:50px;height:50px;border-radius:25px;
+    background:var(--red);border:none;color:#fff;font-size:22px;
+    align-items:center;justify-content:center;cursor:pointer;
+    box-shadow:0 4px 18px rgba(184,50,40,.45);
+  }
+  /* Calmer tap feedback */
+  button,.pcard,.co-card,.fchip,.arc-card{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+}
+
 </style>
 </head>
 <body>
@@ -557,6 +613,7 @@ body{font-family:'Space Grotesk',sans-serif;background:#0a0a0a;color:#f0ede8;fon
 </div>
 
 <div id="toast"></div>
+<button id="mob-fab" onclick="toggleDrawer()" aria-label="Toggle panel">☰</button>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -1518,6 +1575,46 @@ function resetForm(){
   document.querySelectorAll('#src-row .pbtn-src').forEach((b,i)=>{b.className='pbtn pbtn-src'+(i===0?' on-official':'');});
 }
 function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2800);}
+
+/* ── MOBILE DRAWER ─────────────────────── */
+function isMobile(){ return window.innerWidth <= 700; }
+
+function toggleDrawer(force){
+  const sbEl=document.getElementById('sidebar');
+  const open=typeof force==='boolean'?force:!sbEl.classList.contains('drawer-open');
+  sbEl.classList.toggle('drawer-open',open);
+  document.body.classList.toggle('drawer-is-open',open);
+}
+
+/* Swipe up/down on the drawer handle */
+(function(){
+  let startY=null,startOpen=false;
+  document.addEventListener('touchstart',e=>{
+    if(!isMobile())return;
+    const head=e.target.closest('.sb-head');
+    if(!head)return;
+    startY=e.touches[0].clientY;
+    startOpen=document.getElementById('sidebar').classList.contains('drawer-open');
+  },{passive:true});
+  document.addEventListener('touchend',e=>{
+    if(startY===null)return;
+    const dy=e.changedTouches[0].clientY-startY;
+    if(dy<-40)toggleDrawer(true);
+    else if(dy>40)toggleDrawer(false);
+    else if(Math.abs(dy)<10)toggleDrawer();
+    startY=null;
+  },{passive:true});
+})();
+
+/* Tapping the handle also toggles; flying to a site closes the drawer so the map is visible */
+document.addEventListener('DOMContentLoaded',()=>{
+  const head=document.querySelector('.sb-head');
+  if(head)head.addEventListener('click',()=>{if(isMobile())toggleDrawer();});
+});
+const _origFlyTo=flyTo;
+flyTo=function(id){ if(isMobile())toggleDrawer(false); _origFlyTo(id); };
+const _origSwTab=swTab;
+swTab=function(name,btn){ _origSwTab(name,btn); if(isMobile())toggleDrawer(true); };
 
 
 /* ── SAMPLE DATA ───────────────────────── */
