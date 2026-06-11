@@ -1,0 +1,1485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Studio Intelligence — Reykjavík</title>
+<script>
+  const SUPABASE_URL  = 'YOUR_SUPABASE_URL';
+  const SUPABASE_ANON = 'YOUR_SUPABASE_ANON_KEY';
+  const DEV_MODE = true;
+  const DEV_USER = 'Dev User';
+  const STAFF = {
+    admin:'studio2024',anna:'studio2024',bjorn:'studio2024',
+    dagny:'studio2024',einar:'studio2024',freyja:'studio2024',gunnar:'studio2024'
+  };
+</script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Space Grotesk',sans-serif;background:#0a0a0a;color:#f0ede8;font-size:13.5px}
+:root{
+  --bg:#0a0a0a;--s1:#141414;--s2:#1c1c1c;--s3:#272727;--s4:#383838;
+  --b1:rgba(255,255,255,0.06);--b2:rgba(255,255,255,0.12);--b3:rgba(255,255,255,0.22);
+  --t1:#f0ede8;--t2:#c8c4be;--t3:#8a8680;
+  --red:#b83228;--redh:#d43c2f;
+  --green:#27ae60;--greenh:#2ecc71;--greeng:rgba(39,174,96,0.15);
+  --amber:#d4820a;--amberh:#e67e22;--amberg:rgba(212,130,10,0.15);
+  --blue:#2471a3;--blueh:#2980b9;--blueg:rgba(36,113,163,0.15);
+  --r:6px;--rm:8px;--rl:12px
+}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--s4);border-radius:2px}
+
+/* ── AUTH ─────────────────────────────────────── */
+#auth{position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%, #1a1a1a 0%, #0d0d0d 55%, #080808 100%)}
+.auth-card{width:340px;background:transparent;border:none;border-radius:0;padding:0;display:flex;flex-direction:column;align-items:center;text-align:center}
+.auth-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.22em;color:var(--t3);text-transform:uppercase;margin-bottom:20px}
+.auth-card h1{font-size:28px;font-weight:300;letter-spacing:-0.02em;color:var(--t1);line-height:1.2;margin-bottom:6px}
+.auth-card h1 strong{font-weight:600;display:block}
+.auth-card p{font-size:12px;color:var(--t3);margin-bottom:36px;letter-spacing:0.01em}
+.field{width:100%}.field+.field{margin-top:12px}
+.field label{display:block;font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:5px;text-align:left}
+.field input{width:100%;background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.1);border-radius:var(--r);padding:10px 13px;font-size:13px;font-family:'Space Grotesk',sans-serif;color:var(--t1);outline:none;transition:border-color .2s}
+.field input:focus{border-color:rgba(255,255,255,0.28)}
+.auth-btn{width:100%;margin-top:20px;background:var(--red);border:none;border-radius:var(--r);padding:12px;font-size:13px;font-weight:500;font-family:'Space Grotesk',sans-serif;color:#fff;cursor:pointer;transition:background .15s;letter-spacing:0.02em}
+.auth-btn:hover{background:var(--redh)}
+.auth-err{margin-top:10px;font-size:12px;color:#e05040;display:none}
+.dev-note{margin-top:14px;padding:8px 12px;background:rgba(184,50,40,.08);border:0.5px solid rgba(184,50,40,.2);border-radius:var(--r);font-size:11px;color:var(--red);font-family:'IBM Plex Mono',monospace;width:100%;text-align:left}
+
+/* ── APP SHELL ────────────────────────────────── */
+#app{display:none;height:100vh}
+#app.on{display:flex}
+
+/* ── SIDEBAR ──────────────────────────────────── */
+#sidebar{width:330px;min-width:330px;background:var(--s1);border-right:0.5px solid var(--b1);display:flex;flex-direction:column;height:100vh;overflow:hidden;position:relative;z-index:100}
+.sb-head{padding:16px 16px 12px;border-bottom:0.5px solid var(--b1)}
+.sb-eye{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.2em;color:var(--t3);text-transform:uppercase;margin-bottom:5px}
+.sb-head h2{font-size:15px;font-weight:500}
+.user-row{display:flex;align-items:center;justify-content:space-between;margin-top:9px}
+.user-pill{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2)}
+.udot{width:6px;height:6px;border-radius:50%;background:var(--green)}
+.signout{background:none;border:none;font-size:11px;color:var(--t3);font-family:'Space Grotesk',sans-serif;cursor:pointer;transition:color .15s}
+.signout:hover{color:var(--t1)}
+.sb-tabs{display:flex;border-bottom:0.5px solid var(--b1)}
+.sb-tab{flex:1;padding:9px 4px;background:none;border:none;border-bottom:2px solid transparent;font-size:11px;font-weight:500;font-family:'Space Grotesk',sans-serif;color:var(--t3);cursor:pointer;transition:all .15s;letter-spacing:.02em}
+.sb-tab.on{color:var(--t1);border-bottom-color:var(--green)}
+.sb-tab:hover:not(.on){color:var(--t2)}
+.pane{display:none;flex-direction:column;flex:1;overflow:hidden}
+.pane.on{display:flex}
+
+/* ── SEARCH + FILTER ──────────────────────────── */
+.sbar{padding:10px 12px 6px}
+.srel{position:relative}
+.srel input{width:100%;background:var(--s2);border:0.5px solid var(--b2);border-radius:var(--r);padding:8px 32px 8px 10px;font-size:12px;font-family:'Space Grotesk',sans-serif;color:var(--t1);outline:none;transition:border-color .15s}
+.srel input:focus{border-color:var(--green)}
+.srel .ti{position:absolute;right:9px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--t3);pointer-events:none}
+.fstrip{display:flex;gap:4px;padding:4px 12px 8px;border-bottom:0.5px solid var(--b1);flex-wrap:wrap}
+.fchip{font-size:10px;padding:3px 9px;border-radius:20px;border:0.5px solid var(--b2);background:none;color:var(--t3);cursor:pointer;font-family:'Space Grotesk',sans-serif;white-space:nowrap;transition:all .15s}
+.fchip:hover:not(.on){color:var(--t1);border-color:var(--b3)}
+.fchip.on-all{background:var(--s4);border-color:var(--s4);color:var(--t1)}
+.fchip.on-green{background:var(--green);border-color:var(--green);color:#fff}
+.fchip.on-amber{background:var(--amber);border-color:var(--amber);color:#fff}
+.fchip.on-blue{background:var(--blue);border-color:var(--blue);color:#fff}
+.fchip.on-pri{background:var(--red);border-color:var(--red);color:#fff}
+
+/* ── PROJECT LIST ─────────────────────────────── */
+.plist{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.pcard{background:var(--s2);border:0.5px solid var(--b1);border-radius:var(--rm);padding:10px 12px;cursor:pointer;transition:all .15s}
+.pcard:hover{border-color:var(--b2);background:var(--s3)}
+.pcard.sel{background:var(--s3)}
+.pcard.sel-official{border-color:var(--green)}
+.pcard.sel-unofficial{border-color:var(--amber)}
+.pcard.sel-confirmed{border-color:var(--blue)}
+.pc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
+.pc-name{font-size:13px;font-weight:500;line-height:1.3}
+.pc-addr{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--t3);margin-top:2px}
+.pc-co{display:flex;align-items:center;gap:5px;margin-top:5px}
+.co-sw{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.co-nm{font-size:11px;color:var(--t2)}
+.pc-meta{display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:wrap}
+.src-pip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:2px 7px;border-radius:4px}
+.src-official{background:var(--greeng);color:var(--greenh)}
+.src-unofficial{background:var(--amberg);color:var(--amberh)}
+.src-confirmed{background:var(--blueg);color:var(--blueh)}
+.pri-tag{font-size:10px;padding:1px 6px;border-radius:3px;font-family:'IBM Plex Mono',monospace;font-weight:500;text-transform:uppercase;letter-spacing:0.06em}
+.pri-low{color:var(--t3)}
+.pri-medium{color:var(--amber)}
+.pri-high{color:#e05040}
+.pri-critical{background:var(--red);color:#fff;padding:1px 7px;border-radius:3px}
+.pc-user{font-size:10px;color:var(--t3)}
+.empty{padding:36px 16px;text-align:center;color:var(--t3);font-size:13px}
+.arc-card{background:var(--s2);border:0.5px solid var(--b1);border-radius:var(--rm);padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.arc-badge-archived{background:rgba(212,130,10,.15);color:var(--amber);font-size:10px;padding:2px 7px;border-radius:20px;font-family:'IBM Plex Mono',monospace}
+.arc-badge-deleted{background:rgba(184,50,40,.15);color:var(--red);font-size:10px;padding:2px 7px;border-radius:20px;font-family:'IBM Plex Mono',monospace}
+.arc-restore{padding:5px 12px;background:var(--s3);border:0.5px solid var(--b2);border-radius:var(--r);font-size:11px;font-family:'Space Grotesk',sans-serif;color:var(--t2);cursor:pointer;transition:all .15s}
+.arc-restore:hover{border-color:var(--green);color:var(--green)}
+.empty .ti{font-size:26px;display:block;margin-bottom:8px;color:var(--s4)}
+
+/* ── COMPANIES ────────────────────────────────── */
+.co-list{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.co-card{background:var(--s2);border:0.5px solid var(--b1);border-radius:var(--rm);padding:10px 12px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:10px}
+.co-card:hover{border-color:var(--b2);background:var(--s3)}
+.co-avatar{width:36px;height:36px;border-radius:var(--r);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;overflow:hidden}
+.co-avatar img{width:100%;height:100%;object-fit:cover}
+.co-info{flex:1;min-width:0}
+.co-info-name{font-size:13px;font-weight:500}
+.co-info-sub{font-size:11px;color:var(--t3);margin-top:2px}
+
+/* ── ADD FORM ─────────────────────────────────── */
+.aform{flex:1;overflow-y:auto;padding:12px 13px 20px;display:flex;flex-direction:column;gap:11px}
+.flabel{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;color:var(--t3);text-transform:uppercase;margin-bottom:4px;display:block}
+.finput,.fsel,.ftxt{width:100%;background:var(--s2);border:0.5px solid var(--b2);border-radius:var(--r);padding:9px 11px;font-size:13px;font-family:'Space Grotesk',sans-serif;color:var(--t1);outline:none;transition:border-color .15s}
+.finput:focus,.fsel:focus,.ftxt:focus{border-color:var(--green)}
+.fsel option{background:#1c1c1c}
+.ftxt{min-height:70px;resize:vertical}
+.prow{display:flex;gap:5px}
+.pbtn{flex:1;padding:7px 3px;border:0.5px solid var(--b2);border-radius:var(--r);background:var(--s2);color:var(--t2);font-size:11px;font-weight:500;font-family:'Space Grotesk',sans-serif;cursor:pointer;transition:all .15s;text-align:center}
+.pbtn-src.on-official{background:var(--greeng);border-color:var(--green);color:var(--greenh)}
+.pbtn-src.on-unofficial{background:var(--amberg);border-color:var(--amber);color:var(--amberh)}
+.pbtn-src.on-confirmed{background:var(--blueg);border-color:var(--blue);color:var(--blueh)}
+.pbtn-pri.on{background:var(--red);border-color:var(--red);color:#fff}
+.uzone{border:1px dashed var(--b2);border-radius:var(--r);padding:14px;text-align:center;cursor:pointer;transition:border-color .15s}
+.uzone:hover{border-color:rgba(39,174,96,.4)}
+.uzone .ti{font-size:20px;color:var(--t3)}
+.uzone span{display:block;font-size:11px;color:var(--t3);margin-top:4px}
+.fchips2{margin-top:6px;display:flex;flex-wrap:wrap;gap:3px}
+.fchip2{display:flex;align-items:center;gap:4px;background:var(--s3);border-radius:4px;padding:3px 8px;font-size:11px;color:var(--t2)}
+.fchip2 .ti{font-size:11px;cursor:pointer;color:var(--t3);transition:color .1s}
+.fchip2 .ti:hover{color:var(--red)}
+.subtn{width:100%;padding:11px;background:var(--green);border:none;border-radius:var(--r);font-size:13px;font-weight:500;font-family:'Space Grotesk',sans-serif;color:#fff;cursor:pointer;transition:background .15s}
+.subtn:hover{background:var(--greenh)}
+
+/* ── COMPANY PICKER ───────────────────────────── */
+.co-picker{position:relative}
+.co-dropdown{position:absolute;top:100%;left:0;right:0;background:var(--s2);border:0.5px solid var(--b2);border-radius:var(--r);z-index:500;max-height:160px;overflow-y:auto;display:none}
+.co-dropdown.open{display:block}
+.co-opt{padding:8px 10px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .1s}
+.co-opt:hover{background:var(--s3)}
+.co-add-new{padding:8px 10px;font-size:12px;color:var(--green);cursor:pointer;border-top:0.5px solid var(--b1)}
+.co-add-new:hover{background:var(--s3)}
+.sel-co-pill{display:flex;align-items:center;gap:6px;background:var(--s3);border:0.5px solid var(--b2);border-radius:var(--r);padding:7px 10px;font-size:12px;cursor:pointer}
+
+/* ── COMPANY MODAL ────────────────────────────── */
+#co-modal{position:fixed;inset:0;z-index:8000;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.65)}
+#co-modal.open{display:flex}
+.co-modal-box{background:var(--s1);border:0.5px solid var(--b2);border-radius:var(--rl);padding:28px 32px;width:340px}
+.co-modal-box h3{font-size:15px;font-weight:500;margin-bottom:18px}
+.color-palette{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.co-color{width:24px;height:24px;border-radius:4px;cursor:pointer;border:2px solid transparent;transition:border-color .15s}
+.co-color.sel{border-color:#fff}
+.modal-btns{display:flex;gap:8px;margin-top:18px}
+.mbtn{flex:1;padding:9px;border-radius:var(--r);font-size:13px;font-weight:500;font-family:'Space Grotesk',sans-serif;cursor:pointer;transition:all .15s}
+.mbtn-save{background:var(--green);border:none;color:#fff}.mbtn-save:hover{background:var(--greenh)}
+.mbtn-cancel{background:none;border:0.5px solid var(--b2);color:var(--t2)}.mbtn-cancel:hover{color:var(--t1)}
+.logo-zone{border:1px dashed var(--b2);border-radius:var(--r);padding:10px;text-align:center;cursor:pointer;font-size:11px;color:var(--t3);margin-top:6px}
+
+/* ── FOOTER ───────────────────────────────────── */
+.sb-foot{padding:9px 13px;border-top:0.5px solid var(--b1);display:flex;align-items:center;justify-content:space-between}
+.sb-foot-ct{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--t3)}
+.dev-pill{font-size:10px;padding:2px 8px;background:rgba(39,174,96,.12);border:0.5px solid rgba(39,174,96,.3);border-radius:20px;color:var(--green);font-family:'IBM Plex Mono',monospace}
+
+/* ── MAP ──────────────────────────────────────── */
+#map-area{flex:1;position:relative}
+#map{width:100%;height:100%}
+#stats{position:absolute;top:14px;left:14px;z-index:500;background:rgba(20,20,20,.9);border:0.5px solid var(--b2);border-radius:var(--rm);padding:9px 14px;display:flex;gap:16px;backdrop-filter:blur(6px)}
+.stat{text-align:center}
+.stat-n{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:500}
+.stat-l{font-size:9px;color:var(--t3);letter-spacing:.1em;text-transform:uppercase}
+
+/* ── MAP LEGEND ───────────────────────────────── */
+/* ── MAP SEARCH BAR ──────────────────────── */
+#map-search-bar{position:absolute;top:14px;right:14px;z-index:500;width:280px;background:rgba(20,20,20,.92);border:0.5px solid var(--b2);border-radius:var(--rm);overflow:visible;backdrop-filter:blur(6px)}
+#map-search-bar>div:first-child{border-radius:var(--rm)}
+#map-search-bar input{width:100%;background:transparent;border:none;padding:9px 36px 9px 12px;font-size:13px;font-family:'Space Grotesk',sans-serif;color:var(--t1);outline:none}
+#map-search-bar input::placeholder{color:var(--t3)}
+#map-search-results{max-height:200px;overflow-y:auto;border-top:0.5px solid var(--b1)}
+.msr-item{padding:8px 12px;font-size:12px;color:var(--t2);cursor:pointer;transition:background .1s;line-height:1.4}
+.msr-item:hover{background:rgba(255,255,255,.07);color:var(--t1)}
+.msr-item strong{color:var(--t1);display:block;font-size:12px;font-weight:500}
+.msr-item span{color:var(--t3);font-size:10px}
+#legend{position:absolute;bottom:14px;right:14px;z-index:500;background:rgba(20,20,20,.9);border:0.5px solid var(--b2);border-radius:var(--rm);padding:10px 14px;backdrop-filter:blur(6px)}
+.leg-title{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.12em;color:var(--t3);text-transform:uppercase;margin-bottom:8px}
+.leg-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:11px;color:var(--t2)}
+.leg-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.leg-size{display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--b1)}
+.leg-circles{display:flex;align-items:center;gap:4px}
+
+/* ── MINI DETAIL (bottom of sidebar) ─────────────*/
+#mini-detail{display:none;position:absolute;top:calc(14px + 42px + 6px);right:14px;width:280px;z-index:500;background:rgba(20,20,20,.92);border:0.5px solid var(--b2);border-radius:var(--rm);backdrop-filter:blur(6px)}
+#mini-detail.open{display:block}
+.mini-head{padding:11px 13px 9px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.mini-title{font-size:13px;font-weight:500;line-height:1.3}
+.mini-addr{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--t3);margin-top:2px}
+.mini-co{display:inline-flex;align-items:center;gap:5px;margin-top:5px;padding:3px 7px;border-radius:4px;font-size:11px}
+.mini-meta{padding:0 13px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mini-actions{padding:0 13px 13px;display:flex;gap:7px}
+.mini-btn{flex:1;padding:8px;border-radius:var(--r);font-size:12px;font-weight:500;font-family:'Space Grotesk',sans-serif;cursor:pointer;transition:all .15s;text-align:center}
+.mini-btn-full{background:var(--s3);border:0.5px solid var(--b2);color:var(--t1)}.mini-btn-full:hover{border-color:var(--b3)}
+.mini-btn-boost{background:var(--green);border:none;color:#fff}.mini-btn-boost:hover{background:var(--greenh)}
+.closebtn{background:none;border:none;color:var(--t3);font-size:17px;cursor:pointer;flex-shrink:0;transition:color .15s;line-height:1;padding:2px}
+.closebtn:hover{color:var(--t1)}
+
+/* ── FULL DETAIL POPUP ────────────────────────── */
+#full-detail-overlay{position:fixed;inset:0;z-index:6000;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);padding:20px}
+#full-detail-overlay.open{display:flex}
+#full-detail{background:var(--s1);border:0.5px solid var(--b2);border-radius:14px;width:100%;max-width:580px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.7);transform:scale(.96);transition:transform .2s cubic-bezier(.4,0,.2,1);opacity:0;transition:transform .2s,opacity .2s}
+#full-detail-overlay.open #full-detail{transform:scale(1);opacity:1}
+.fd-header{padding:20px 22px 14px;border-bottom:0.5px solid var(--b1);flex-shrink:0}
+.fd-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.18em;color:var(--t3);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.fd-title{font-size:18px;font-weight:500;line-height:1.3;margin-bottom:5px}
+.fd-addr{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--t3)}
+.fd-body{flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:18px}
+.fd-section{}
+.fd-sec-title{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.16em;color:var(--t3);text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:0.5px solid var(--b1)}
+.fd-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fd-field{}
+.fd-field-label{font-size:10px;color:var(--t3);margin-bottom:3px;font-family:'IBM Plex Mono',monospace}
+.fd-field-val{font-size:13px}
+.fd-notes{background:var(--s2);border-radius:var(--rm);padding:14px;font-size:13px;color:var(--t2);line-height:1.7;white-space:pre-wrap}
+/* COMMENT THREAD */
+.comment-thread{display:flex;flex-direction:column;gap:10px}
+.comment-item{background:var(--s2);border-radius:var(--rm);padding:12px 14px;border-left:3px solid var(--b2)}
+.comment-item.mine{border-left-color:var(--green)}
+.comment-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.comment-author{font-size:11px;font-weight:500;color:var(--t1)}
+.comment-time{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--t3)}
+.comment-text{font-size:13px;color:var(--t2);line-height:1.6}
+.comment-input-wrap{margin-top:4px}
+.comment-textarea{width:100%;background:var(--s2);border:0.5px solid var(--b2);border-radius:var(--rm);padding:11px 13px;font-size:13px;font-family:'Space Grotesk',sans-serif;color:var(--t1);outline:none;resize:none;min-height:80px;transition:border-color .15s}
+.comment-textarea:focus{border-color:var(--green)}
+.comment-submit{margin-top:8px;padding:9px 18px;background:var(--green);border:none;border-radius:var(--r);font-size:12px;font-weight:500;font-family:'Space Grotesk',sans-serif;color:#fff;cursor:pointer;transition:background .15s}
+.comment-submit:hover{background:var(--greenh)}
+/* DOCS */
+.doc-grid{display:flex;flex-wrap:wrap;gap:6px}
+.doc-item{display:flex;align-items:center;gap:6px;background:var(--s2);border:0.5px solid var(--b1);border-radius:var(--r);padding:6px 10px;font-size:12px;color:var(--t2)}
+.doc-item .ti{font-size:14px;color:var(--t3)}
+/* ACTIONS BAR */
+.fd-actions{padding:14px 22px;border-top:0.5px solid var(--b1);display:flex;gap:8px;flex-shrink:0}
+.fd-act{flex:1;padding:10px;border-radius:var(--r);font-size:13px;font-weight:500;font-family:'Space Grotesk',sans-serif;cursor:pointer;transition:all .15s;text-align:center}
+.fd-act-boost{background:var(--green);border:none;color:#fff}.fd-act-boost:hover{background:var(--greenh)}
+.fd-act-del{background:none;border:0.5px solid var(--b2);color:var(--t3)}.fd-act-del:hover{border-color:var(--red);color:var(--red)}
+.fd-act-close{background:none;border:0.5px solid var(--b2);color:var(--t2)}.fd-act-close:hover{border-color:var(--b3);color:var(--t1)}
+
+/* ── MAP HINT ─────────────────────────────────── */
+#mhint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(20,20,20,.88);border:0.5px solid var(--b2);border-radius:20px;padding:6px 14px;font-size:11px;color:var(--t2);z-index:400;pointer-events:none;display:none}
+#mhint.show{display:block}
+
+/* ── GEOCODE ──────────────────────────────────── */
+.geo-results{margin-top:5px;max-height:120px;overflow-y:auto}
+.geo-item{padding:7px 9px;border-radius:var(--r);font-size:12px;color:var(--t2);cursor:pointer;transition:background .1s}
+.geo-item:hover{background:var(--s3);color:var(--t1)}
+.geo-item strong{color:var(--t1)}
+.coord-hint{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--t3);margin-top:4px;display:none}
+
+/* ── TOAST ────────────────────────────────────── */
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(14px);background:var(--s3);border:0.5px solid var(--b2);border-radius:var(--rm);padding:9px 18px;font-size:12px;color:var(--t1);z-index:9999;opacity:0;transition:all .22s;pointer-events:none}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── LEAFLET ──────────────────────────────────── */
+.leaflet-popup-content-wrapper{background:#1c1c1c!important;border:0.5px solid rgba(255,255,255,.15)!important;border-radius:8px!important;box-shadow:0 8px 32px rgba(0,0,0,.7)!important;color:#f0ede8!important;font-family:'Space Grotesk',sans-serif!important}
+.leaflet-popup-tip{background:#1c1c1c!important}
+.leaflet-popup-close-button{color:#5e5b57!important}
+.lpu-h{font-size:13px;font-weight:500;margin-bottom:6px}
+.lpu-row{font-size:12px;color:#c0bdb8;padding:3px 4px;cursor:pointer;border-radius:4px;transition:background .1s}
+.lpu-row:hover{background:rgba(255,255,255,.06);color:#f0ede8}
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="auth">
+  <div class="auth-card">
+    <div class="auth-eyebrow">Studio Intelligence</div>
+    <h1>Reykjavík<strong>Project Map</strong></h1>
+    <p>Sign in with your studio credentials</p>
+    <div id="dev-note" class="dev-note" style="display:none"></div>
+    <div class="field"><label>Username</label><input type="text" id="iu" placeholder="your.name" autocomplete="off"/></div>
+    <div class="field"><label>Access Code</label><input type="password" id="ic" placeholder="••••••••"/></div>
+    <button class="auth-btn" onclick="login()">Sign In</button>
+    <div class="auth-err" id="aerr">Invalid credentials.</div>
+  </div>
+</div>
+
+<!-- COMPANY MODAL -->
+<div id="co-modal">
+  <div class="co-modal-box">
+    <h3>Add Company</h3>
+    <div style="margin-bottom:10px"><label class="flabel">Company Name</label><input class="finput" id="co-name-inp" placeholder="e.g. Ístak, Efla, Arkís"/></div>
+    <div style="margin-bottom:10px"><label class="flabel">Brand Colour</label><div class="color-palette" id="co-colors"></div></div>
+    <div>
+      <label class="flabel">Logo (optional)</label>
+      <div class="logo-zone" onclick="document.getElementById('logo-inp').click()">
+        <img id="logo-preview" style="width:48px;height:48px;border-radius:6px;object-fit:cover;display:none"/>
+        <span id="logo-hint">Click to upload logo image</span>
+      </div>
+      <input type="file" id="logo-inp" style="display:none" accept="image/*" onchange="handleLogo(this)"/>
+    </div>
+    <div class="modal-btns">
+      <button class="mbtn mbtn-cancel" onclick="closeCoModal()">Cancel</button>
+      <button class="mbtn mbtn-save" onclick="saveCompany()">Save Company</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- EDIT LOCATION MODAL -->
+<div id="edit-modal" style="position:fixed;inset:0;z-index:8500;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.65)">
+  <div style="background:var(--s1);border:0.5px solid var(--b2);border-radius:var(--rl);padding:26px 30px;width:380px">
+    <h3 style="font-size:15px;font-weight:500;margin-bottom:6px">Edit Location</h3>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:16px">Search for the correct address below</p>
+    <div style="margin-bottom:12px">
+      <label class="flabel">Search Address</label>
+      <div style="position:relative">
+        <input class="finput" id="edit-addr-inp" placeholder="e.g. Miklabraut 1, Reykjavík…" oninput="editGeoSearch(this.value)" autocomplete="off" style="padding-right:32px"/>
+        <i class="ti ti-map-search" style="position:absolute;right:9px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--t3);pointer-events:none"></i>
+      </div>
+      <div id="edit-geo-res" style="max-height:160px;overflow-y:auto;margin-top:4px;background:var(--s2);border-radius:var(--r)"></div>
+    </div>
+    <button onclick="startEditPickMode()" style="width:100%;margin-bottom:12px;padding:9px;background:var(--s3);border:0.5px solid var(--b2);border-radius:var(--r);color:var(--t2);font-size:12px;font-family:'Space Grotesk',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--b2)';this.style.color='var(--t2)'">
+      <i class="ti ti-map-pin" style="font-size:14px"></i> Or pick a point on the map
+    </button>
+    <div id="edit-pin-hint" style="display:none;font-size:11px;padding:7px 10px;background:rgba(39,174,96,.1);border:0.5px solid rgba(39,174,96,.25);border-radius:var(--r);color:var(--green);margin-bottom:12px;font-family:'IBM Plex Mono',monospace"></div>
+    <div style="display:flex;gap:8px">
+      <button class="mbtn mbtn-cancel" onclick="closeEditModal()">Cancel</button>
+      <button class="mbtn mbtn-save" id="edit-save-btn" onclick="saveEditLocation()">Save Location</button>
+    </div>
+    <input type="hidden" id="edit-lat"/>
+    <input type="hidden" id="edit-lon"/>
+  </div>
+</div>
+<!-- APP -->
+<div id="app">
+  <div id="sidebar">
+    <div class="sb-head">
+      <div class="sb-eye">Reykjavík · Project Intelligence</div>
+      <h2>Opportunity Map</h2>
+      <div class="user-row">
+        <div class="user-pill"><div class="udot"></div><span id="uname">—</span></div>
+        <button class="signout" onclick="signOut()">Sign out</button>
+      </div>
+    </div>
+    <div class="sb-tabs">
+      <button class="sb-tab on"  onclick="swTab('sites',this)">Sites</button>
+      <button class="sb-tab"     onclick="swTab('won',this)">Won</button>
+      <button class="sb-tab"     onclick="swTab('companies',this)">Companies</button>
+      <button class="sb-tab"     onclick="swTab('add',this)">+ Add</button>
+      <button class="sb-tab"     onclick="swTab('archive',this)">Archive</button>
+    </div>
+
+    <!-- SITES -->
+    <div class="pane on" id="pane-sites">
+      <div class="sbar"><div class="srel"><input type="text" placeholder="Search sites, companies, notes…" oninput="searchSites(this.value)"/><i class="ti ti-search"></i></div></div>
+      <div class="fstrip">
+        <button class="fchip on-all" onclick="setFilter('all',this,'on-all')">All</button>
+        <button class="fchip" onclick="setFilter('official',this,'on-green')">● Official</button>
+        <button class="fchip" onclick="setFilter('unofficial',this,'on-amber')">● Unconfirmed</button>
+        <button class="fchip" onclick="setFilter('confirmed',this,'on-blue')">● Confirmed</button>
+        <button class="fchip" onclick="setFilter('critical',this,'on-pri')">Critical</button>
+        <button class="fchip" onclick="setFilter('high',this,'on-pri')">High</button>
+      </div>
+      <div class="plist" id="plist"><div class="empty"><i class="ti ti-map-pin"></i>No sites yet.</div></div>
+    </div>
+
+    <!-- COMPANIES -->
+    <div class="pane" id="pane-companies">
+      <div class="sbar"><div class="srel"><input type="text" placeholder="Search companies…" oninput="searchCompanies(this.value)"/><i class="ti ti-search"></i></div></div>
+      <div class="co-list" id="colist"><div class="empty"><i class="ti ti-building"></i>No companies yet.</div></div>
+    </div>
+
+    <!-- ADD -->
+    <div class="pane" id="pane-add">
+      <div class="aform">
+        <div><label class="flabel">Project Title</label><input class="finput" id="f-title" placeholder="e.g. Former industrial site, Grandi"/></div>
+        <div>
+          <label class="flabel">Location / Address</label>
+          <div class="srel" style="margin-bottom:0"><input class="finput" id="f-addr" placeholder="Search Reykjavík address…" oninput="geoSearch(this.value)" style="padding-right:32px"/><i class="ti ti-map-search" style="position:absolute;right:9px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--t3);pointer-events:none"></i></div>
+          <div class="geo-results" id="geo-res"></div>
+          <div class="coord-hint" id="coord-hint"></div>
+          <button onclick="startAddPickMode()" style="width:100%;margin-top:6px;padding:8px;background:var(--s3);border:0.5px solid var(--b2);border-radius:var(--r);color:var(--t2);font-size:11px;font-family:'Space Grotesk',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:all .15s" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--b2)';this.style.color='var(--t2)'">
+            <i class="ti ti-map-pin" style="font-size:13px"></i> Pick point on map
+          </button>
+        </div>
+        <div>
+          <label class="flabel">Linked Company</label>
+          <div class="co-picker">
+            <div id="co-sel-display" class="sel-co-pill" onclick="toggleCoPicker()" style="display:none"></div>
+            <input class="finput" id="co-search" placeholder="Search or add company…" oninput="filterCoPicker(this.value)" onclick="openCoPicker()" autocomplete="off"/>
+            <div class="co-dropdown" id="co-dropdown"></div>
+          </div>
+        </div>
+        <div>
+          <label class="flabel">Source Credibility</label>
+          <div class="prow" id="src-row">
+            <button class="pbtn pbtn-src on-official" onclick="setSrc('official',this)">Official</button>
+            <button class="pbtn pbtn-src" onclick="setSrc('unofficial',this)">Unofficial</button>
+            <button class="pbtn pbtn-src" onclick="setSrc('confirmed',this)">Confirmed</button>
+          </div>
+        </div>
+        <div>
+          <label class="flabel">Priority</label>
+          <div class="prow" id="pri-row">
+            <button class="pbtn pbtn-pri on" onclick="setPri('low',this)">Low</button>
+            <button class="pbtn pbtn-pri" onclick="setPri('medium',this)">Medium</button>
+            <button class="pbtn pbtn-pri" onclick="setPri('high',this)">High</button>
+            <button class="pbtn pbtn-pri" onclick="setPri('critical',this)">Critical</button>
+          </div>
+        </div>
+        <div><label class="flabel">Project Type</label>
+          <select class="fsel" id="f-type">
+            <option value="residential">Residential</option>
+            <option value="commercial">Commercial</option>
+            <option value="mixed-use">Mixed Use</option>
+            <option value="cultural">Cultural / Public</option>
+            <option value="industrial">Industrial / Infrastructure</option>
+            <option value="renovation">Renovation / Heritage</option>
+            <option value="landscape">Landscape / Urban</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div><label class="flabel">Initial Notes</label><textarea class="ftxt" id="f-notes" placeholder="Observations, contacts, rationale…"></textarea></div>
+        <div>
+          <label class="flabel">Attach Documents</label>
+          <div class="uzone" onclick="document.getElementById('f-files').click()"><i class="ti ti-file-upload"></i><span>Click to attach PDFs or documents</span></div>
+          <input type="file" id="f-files" style="display:none" multiple accept=".pdf,.doc,.docx,.txt,.jpg,.png" onchange="addFiles(this)"/>
+          <div class="fchips2" id="file-chips"></div>
+        </div>
+        <button class="subtn" onclick="addProject()">Add Site to Map</button>
+        <div style="height:8px"></div>
+      </div>
+    </div>
+
+    <!-- WON PANE -->
+    <div class="pane" id="pane-won">
+      <div class="sbar"><div class="srel"><input type="text" placeholder="Search secured projects…" oninput="searchWon(this.value)"/><i class="ti ti-search"></i></div></div>
+      <div style="padding:8px 12px 6px;border-bottom:0.5px solid var(--b1);font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.16em;color:var(--t3);text-transform:uppercase;display:flex;align-items:center;gap:6px">
+        <i class="ti ti-flag-filled" style="color:var(--red);font-size:11px"></i> Secured projects · <span id="won-ct">0</span>
+      </div>
+      <div class="plist" id="won-list"><div class="empty"><i class="ti ti-flag"></i>No secured projects yet.</div></div>
+    </div>
+
+    <!-- ARCHIVE PANE -->
+    <div class="pane" id="pane-archive">
+      <div class="sbar"><div class="srel"><input type="text" placeholder="Search archived…" oninput="searchArchive(this.value)"/><i class="ti ti-search"></i></div></div>
+      <div style="padding:6px 12px 4px;border-bottom:0.5px solid var(--b1);display:flex;gap:6px">
+        <button class="fchip on-all" id="arc-f-all"      onclick="setArcFilter('all',this)">All</button>
+        <button class="fchip"        id="arc-f-archived" onclick="setArcFilter('archived',this)">Archived</button>
+        <button class="fchip"        id="arc-f-deleted"  onclick="setArcFilter('deleted',this)">Deleted</button>
+      </div>
+      <div class="plist" id="arc-list"><div class="empty"><i class="ti ti-archive"></i>No archived projects yet.</div></div>
+    </div>
+    <div class="sb-foot">
+      <span class="sb-foot-ct"><span id="ct">0</span> sites · <span id="co-ct">0</span> companies</span>
+      <span id="devpill" class="dev-pill" style="display:none">DEV</span>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div id="map-area">
+    <div id="map"></div>
+    <div id="stats">
+      <div class="stat"><div class="stat-n" id="s-t">0</div><div class="stat-l">Sites</div></div>
+      <div class="stat"><div class="stat-n" id="s-h">0</div><div class="stat-l">High</div></div>
+      <div class="stat"><div class="stat-n" id="s-c">0</div><div class="stat-l">Critical</div></div>
+      <div class="stat"><div class="stat-n" id="s-w" style="color:var(--redh)">0</div><div class="stat-l">Won</div></div>
+      <div class="stat"><div class="stat-n" id="s-co">0</div><div class="stat-l">Companies</div></div>
+    </div>
+    <div id="map-search-bar">
+      <div style="position:relative">
+        <input id="map-search-inp" type="text" placeholder="Search address on map…" oninput="mapGeoSearch(this.value)" autocomplete="off"/>
+        <i class="ti ti-search" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--t3);pointer-events:none"></i>
+      </div>
+      <div id="map-search-results"></div>
+    </div>
+    <div id="mini-detail">
+      <div class="mini-head">
+        <div style="flex:1;min-width:0">
+          <div class="mini-title" id="md-title"></div>
+          <div class="mini-addr" id="md-addr"></div>
+          <div id="md-co"></div>
+        </div>
+        <button class="closebtn" onclick="closeMini()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="mini-meta" id="md-meta"></div>
+      <div class="mini-actions">
+        <button class="mini-btn mini-btn-full" onclick="openFull(currentMiniId)"><i class="ti ti-arrows-maximize" style="font-size:12px"></i> Full Details</button>
+        <button class="mini-btn mini-btn-boost" id="md-boost-btn" onclick="boostFromMini()">↑ Boost</button>
+      </div>
+    </div>
+    <div id="legend">
+      <div class="leg-title">Map Key</div>
+      <div class="leg-row"><div class="leg-dot" style="background:#27ae60"></div>Official source</div>
+      <div class="leg-row"><div class="leg-dot" style="background:#d4820a"></div>Unofficial / rumour</div>
+      <div class="leg-row"><div class="leg-dot" style="background:#2471a3"></div>Confirmed by contact</div>
+      <div class="leg-row"><i class="ti ti-flag-filled" style="color:var(--red);font-size:11px;width:8px;margin-right:1px"></i>Secured / won</div>
+      <div class="leg-size">
+        <span style="font-size:10px;color:var(--t3)">Size = priority</span>
+        <div class="leg-circles">
+          <div style="width:8px;height:8px;border-radius:50%;background:rgba(150,150,150,.5)"></div>
+          <div style="width:14px;height:14px;border-radius:50%;background:rgba(150,150,150,.6)"></div>
+          <div style="width:20px;height:20px;border-radius:50%;background:rgba(150,150,150,.7)"></div>
+          <div style="width:28px;height:28px;border-radius:50%;background:rgba(150,150,150,.8)"></div>
+        </div>
+      </div>
+    </div>
+    <div id="mhint">Click the map while on the Add tab to drop a pin</div>
+  </div>
+
+  <!-- FULL DETAIL PANEL -->
+  <div id="full-detail-overlay" onclick="if(event.target===this)closeFull()">
+    <div id="full-detail">
+      <div class="fd-header">
+        <div class="fd-eyebrow">
+          <span id="fd-eyebrow-src"></span>
+          <button class="closebtn" onclick="closeFull()"><i class="ti ti-x"></i></button>
+        </div>
+        <input id="fd-edit-title" style="width:100%;background:transparent;border:none;border-bottom:0.5px solid var(--b2);outline:none;font-size:18px;font-weight:500;font-family:'Space Grotesk',sans-serif;color:var(--t1);padding:0 0 6px;margin-bottom:4px;transition:border-color .15s" onfocus="this.style.borderColor='var(--green)'" onblur="this.style.borderColor='var(--b2)'" />
+        <div class="fd-addr" id="fd-addr"></div>
+      </div>
+      <div class="fd-body" id="fd-body"></div>
+      <div class="fd-actions" style="flex-wrap:wrap;gap:6px">
+        <div style="display:flex;gap:4px;width:100%">
+          <button id="fdp-low"      class="fd-act" style="font-size:11px;padding:7px 4px;border:0.5px solid var(--b2);background:none;color:var(--t3)"    onclick="setPriorityFull('low')">Low</button>
+          <button id="fdp-medium"   class="fd-act" style="font-size:11px;padding:7px 4px;border:0.5px solid var(--b2);background:none;color:var(--amber)" onclick="setPriorityFull('medium')">Medium</button>
+          <button id="fdp-high"     class="fd-act" style="font-size:11px;padding:7px 4px;border:0.5px solid var(--b2);background:none;color:#e05040"       onclick="setPriorityFull('high')">High</button>
+          <button id="fdp-critical" class="fd-act" style="font-size:11px;padding:7px 4px;border:0.5px solid var(--b2);background:none;color:var(--red)"    onclick="setPriorityFull('critical')">Critical</button>
+        </div>
+        <div style="display:flex;gap:6px;width:100%">
+          <button class="fd-act" style="background:var(--red);border:none;color:#fff;flex:1" onmouseover="this.style.background='var(--redh)'" onmouseout="this.style.background='var(--red)'" onclick="winFromFull()"><i class="ti ti-flag-filled" style="font-size:12px"></i> Mark as Secured</button>
+        </div>
+        <div style="display:flex;gap:6px;width:100%">
+          <button class="fd-act" style="background:none;border:0.5px solid var(--b2);color:var(--t2);flex:1" onclick="openEditModal(currentFullId)"><i class="ti ti-map-pin" style="font-size:12px"></i> Edit Location</button>
+          <button class="fd-act" style="background:none;border:0.5px solid var(--b2);color:var(--amber);flex:1" onclick="archiveFromFull()">Archive</button>
+          <button class="fd-act fd-act-del" onclick="deleteFromFull()">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+/* ── STATE ─────────────────────────────── */
+let map, sb;
+let projects  = [];
+let companies = [];
+let markers   = {};
+let selCoords = null;
+let curPri = 'low', curSrc = 'official', curFilter = 'all', curFilterClass = 'on-all';
+let curCo  = null;
+let attachedFiles = [];
+let currentUser   = null;
+let currentMiniId = null, currentFullId = null;
+let selLogoB64 = null, selCoColor = '#3498db';
+let geoTimer;
+
+const SRC_COLOR = {
+  official:  { fill:'rgba(39,174,96,',  border:'rgba(46,204,113,',  hex:'#27ae60' },
+  unofficial:{ fill:'rgba(212,130,10,', border:'rgba(230,152,30,',  hex:'#d4820a' },
+  confirmed: { fill:'rgba(36,113,163,', border:'rgba(41,128,185,',  hex:'#2471a3' }
+};
+const PRI_ORDER  = {low:1,medium:2,high:3,critical:4};
+const PRI_RADIUS = {low:9,medium:15,high:21,critical:30};
+const PRI_ALPHA  = {low:.38,medium:.55,high:.72,critical:.88};
+const CO_COLORS  = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c','#3498db','#9b59b6','#e91e63','#00bcd4','#ff5722','#607d8b','#795548','#4caf50','#2196f3','#673ab7'];
+
+/* ── INIT ──────────────────────────────── */
+window.addEventListener('DOMContentLoaded', () => {
+  if (DEV_MODE) {
+    const n = document.getElementById('dev-note');
+    n.style.display = 'block';
+    n.textContent = '⚡ Dev mode — auth bypassed, data stored locally';
+    document.querySelector('.auth-btn').textContent = 'Enter (Dev Mode)';
+    document.getElementById('iu').value = DEV_USER;
+    document.getElementById('ic').value = 'dev';
+  }
+  if (!DEV_MODE && SUPABASE_URL !== 'YOUR_SUPABASE_URL')
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  buildColorPalette();
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && document.getElementById('auth').style.display !== 'none') login();
+    if (e.key === 'Escape') { closeFull(); closeMini(); }
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.co-picker')) closeCoPicker();
+  });
+});
+
+function buildColorPalette() {
+  document.getElementById('co-colors').innerHTML = CO_COLORS.map(c =>
+    `<div class="co-color" style="background:${c}" onclick="pickCoColor('${c}',this)"></div>`
+  ).join('');
+}
+
+/* ── AUTH ──────────────────────────────── */
+async function login() {
+  if (DEV_MODE) { go(document.getElementById('iu').value.trim() || DEV_USER); return; }
+  const u = document.getElementById('iu').value.trim().toLowerCase();
+  const c = document.getElementById('ic').value.trim();
+  let ok = false, displayName = '';
+  if (sb) {
+    const { data } = await sb.from('staff').select('display_name').eq('username',u).eq('access_code',c).single();
+    if (data) { ok=true; displayName=data.display_name; }
+  } else {
+    if (STAFF[u] && STAFF[u]===c) { ok=true; displayName=u.charAt(0).toUpperCase()+u.slice(1); }
+  }
+  if (!ok) { document.getElementById('aerr').style.display='block'; return; }
+  document.getElementById('aerr').style.display='none';
+  go(displayName);
+}
+
+function go(name) {
+  currentUser = name;
+  document.getElementById('uname').textContent = name;
+  document.getElementById('auth').style.display = 'none';
+  document.getElementById('app').classList.add('on');
+  if (DEV_MODE) document.getElementById('devpill').style.display = 'inline';
+  initMap(); loadArchive(); loadWon(); loadData();
+}
+
+function signOut() {
+  currentUser=null; projects=[]; companies=[]; markers={}; won=[]; wonMarkers=[];
+  document.getElementById('app').classList.remove('on');
+  document.getElementById('auth').style.display = 'flex';
+  if (!DEV_MODE) { document.getElementById('iu').value=''; document.getElementById('ic').value=''; }
+  if (map) { map.remove(); map=null; }
+}
+
+/* ── MAP ───────────────────────────────── */
+function initMap() {
+  map = L.map('map',{center:[64.135,-21.895],zoom:13,zoomControl:false,minZoom:5,maxBounds:[[-90,-180],[90,180]],maxBoundsViscosity:1.0});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    attribution:'© OpenStreetMap © CARTO',subdomains:'abcd',maxZoom:19,noWrap:true
+  }).addTo(map);
+  L.control.zoom({position:'bottomleft'}).addTo(map);
+  map.on('click', e => {
+    const lat=e.latlng.lat, lng=e.latlng.lng;
+
+    // Edit-location pick mode
+    if (window._editPickMode) {
+      window._editPickMode = false;
+      map.getContainer().style.cursor = '';
+      document.getElementById('mhint').classList.remove('show');
+      reverseGeocode(lat, lng).then(label => {
+        document.getElementById('edit-lat').value = lat;
+        document.getElementById('edit-lon').value = lng;
+        document.getElementById('edit-addr-inp').value = label;
+        const hint = document.getElementById('edit-pin-hint');
+        hint.style.display = 'block';
+        hint.textContent = '📍 ' + label;
+        document.getElementById('edit-modal').style.display = 'flex';
+      });
+      return;
+    }
+
+    // Add-form pick mode (triggered from Sites tab pin button)
+    if (window._addPickMode) {
+      window._addPickMode = false;
+      map.getContainer().style.cursor = '';
+      document.getElementById('mhint').classList.remove('show');
+      reverseGeocode(lat, lng).then(label => {
+        selCoords = {lat, lng};
+        document.getElementById('f-addr').value = label;
+        document.getElementById('coord-hint').style.display = 'block';
+        document.getElementById('coord-hint').textContent = `📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        document.getElementById('geo-res').innerHTML = '';
+        swTab('add', document.querySelector('.sb-tab'));
+      });
+      return;
+    }
+
+    // Normal: Add tab open
+    if (!document.getElementById('pane-add').classList.contains('on')) return;
+    selCoords = {lat, lng};
+    document.getElementById('coord-hint').style.display='block';
+    document.getElementById('coord-hint').textContent=`📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    if (!document.getElementById('f-addr').value)
+      document.getElementById('f-addr').value=`Map pin (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+    document.getElementById('geo-res').innerHTML='';
+  });
+}
+
+/* ── GEOCODE ───────────────────────────── */
+// Iceland-biased Nominatim
+async function nominatimIC(q, limit=6) {
+  const p = new URLSearchParams({q,format:'json',limit,addressdetails:1,countrycodes:'is',viewbox:'-24.8,63.2,-12.5,66.7',bounded:0});
+  const r = await fetch('https://nominatim.openstreetmap.org/search?'+p,{headers:{'Accept-Language':'is,en','User-Agent':'StudioIntelligence/1.0'}});
+  return r.json();
+}
+// Reverse geocode a lat/lng to a human label
+async function reverseGeocode(lat, lng) {
+  try {
+    const p = new URLSearchParams({lat,lon:lng,format:'json',addressdetails:1,'accept-language':'is,en'});
+    const r = await fetch('https://nominatim.openstreetmap.org/reverse?'+p,{headers:{'User-Agent':'StudioIntelligence/1.0'}});
+    const d = await r.json();
+    if(!d||d.error) return `Map pin (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+    const a=d.address;
+    const road=a.road||a.pedestrian||a.neighbourhood||a.suburb||'';
+    const num=a.house_number?(' '+a.house_number):'';
+    const city=a.city||a.town||a.village||'';
+    return [road+num, city].filter(Boolean).join(', ') || d.display_name.split(',').slice(0,2).join(',');
+  } catch(e) { return `Map pin (${lat.toFixed(5)}, ${lng.toFixed(5)})`; }
+}
+
+// Enter pick-on-map mode for edit-location
+function startEditPickMode() {
+  document.getElementById('edit-modal').style.display = 'none';
+  window._editPickMode = true;
+  map.getContainer().style.cursor = 'crosshair';
+  const hint = document.getElementById('mhint');
+  hint.textContent = '📍 Click anywhere on the map to set location — then it will snap back';
+  hint.classList.add('show');
+}
+
+// Enter pick-on-map mode for add-form
+function startAddPickMode() {
+  window._addPickMode = true;
+  map.getContainer().style.cursor = 'crosshair';
+  const hint = document.getElementById('mhint');
+  hint.textContent = '📍 Click anywhere on the map to pin this location';
+  hint.classList.add('show');
+}
+
+function fmtR(x) {
+  const a=x.address;
+  const label=a.road||a.pedestrian||a.neighbourhood||a.suburb||x.display_name.split(',')[0];
+  const sub=[a.suburb||a.quarter||a.city_district||'',a.city||a.town||a.village||''].filter(Boolean).join(', ');
+  return {lat:parseFloat(x.lat),lon:parseFloat(x.lon),label,sub};
+}
+
+// Add-form geocoder
+function geoSearch(q) {
+  clearTimeout(geoTimer);
+  const el=document.getElementById('geo-res');
+  if(q.length<2){el.innerHTML='';return;}
+  geoTimer=setTimeout(async()=>{
+    try {
+      const d=await nominatimIC(q);
+      if(!d.length){el.innerHTML='<div class="geo-item" style="cursor:default;color:var(--t3)">No results found in Iceland</div>';return;}
+      el.innerHTML=d.map(x=>{
+        const f=fmtR(x);
+        return `<div class="geo-item" onclick="pickGeo(${f.lat},${f.lon},'${f.label.replace(/'/g,"\'")}','${f.sub.replace(/'/g,"\'")}')"><strong>${f.label}</strong>${f.sub?', '+f.sub:''}</div>`;
+      }).join('');
+    }catch(e){console.warn(e);}
+  },350);
+}
+function pickGeo(lat,lon,label,sub) {
+  selCoords={lat,lng:lon};
+  document.getElementById('f-addr').value=label+(sub?', '+sub:'');
+  const ch=document.getElementById('coord-hint');ch.style.display='block';
+  ch.textContent=`📍 ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+  document.getElementById('geo-res').innerHTML='';
+  map.flyTo([lat,lon],16,{duration:1});
+}
+
+// Edit-location geocoder
+let editGeoTimer;
+function editGeoSearch(q) {
+  clearTimeout(editGeoTimer);
+  const el=document.getElementById('edit-geo-res');
+  if(q.length<2){el.innerHTML='';return;}
+  editGeoTimer=setTimeout(async()=>{
+    try {
+      const d=await nominatimIC(q);
+      if(!d.length){el.innerHTML='<div class="geo-item" style="cursor:default;color:var(--t3)">No results</div>';return;}
+      el.innerHTML=d.map(x=>{
+        const f=fmtR(x);
+        return `<div class="geo-item" onclick="pickEditGeo(${f.lat},${f.lon},'${f.label.replace(/'/g,"\'")}','${f.sub.replace(/'/g,"\'")}')"><strong>${f.label}</strong>${f.sub?', '+f.sub:''}</div>`;
+      }).join('');
+    }catch(e){}
+  },350);
+}
+function pickEditGeo(lat,lon,label,sub) {
+  document.getElementById('edit-lat').value=lat;
+  document.getElementById('edit-lon').value=lon;
+  const addr=label+(sub?', '+sub:'');
+  document.getElementById('edit-addr-inp').value=addr;
+  document.getElementById('edit-geo-res').innerHTML='';
+  const hint=document.getElementById('edit-pin-hint');
+  hint.style.display='block';
+  hint.textContent='📍 '+addr;
+  const btn=document.getElementById('edit-save-btn');
+  btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';
+  map.flyTo([lat,lon],16,{duration:0.8});
+}
+
+// Map search bar (top-right)
+let mapSearchTimer;
+function mapGeoSearch(q) {
+  clearTimeout(mapSearchTimer);
+  const el=document.getElementById('map-search-results');
+  if(q.length<2){el.innerHTML='';return;}
+  mapSearchTimer=setTimeout(async()=>{
+    try {
+      const d=await nominatimIC(q);
+      if(!d.length){el.innerHTML='<div class="msr-item"><span>No results found</span></div>';return;}
+      el.innerHTML=d.map(x=>{
+        const f=fmtR(x);
+        return `<div class="msr-item" onclick="map.flyTo([${f.lat},${f.lon}],16,{duration:1});document.getElementById('map-search-inp').value='${f.label.replace(/'/g,"\'")}';document.getElementById('map-search-results').innerHTML=''"><strong>${f.label}</strong><span>${f.sub}</span></div>`;
+      }).join('');
+    }catch(e){}
+  },350);
+}
+
+/* ── COMPANY PICKER ────────────────────── */
+function renderCoPicker(list){
+  const dd=document.getElementById('co-dropdown');
+  dd.innerHTML=list.map(co=>{
+    const init=co.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    return `<div class="co-opt" onclick="selectCo(${co.id})">
+      ${co.logo?`<img src="${co.logo}" style="width:18px;height:18px;border-radius:3px;object-fit:cover"/>`:
+        `<div style="width:18px;height:18px;border-radius:3px;background:${co.color};display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:600">${init}</div>`}
+      <span>${co.name}</span></div>`;
+  }).join('')+`<div class="co-add-new" onclick="openCoModal()"><i class="ti ti-plus" style="font-size:12px"></i> Add new company…</div>`;
+  dd.classList.add('open');
+}
+function openCoPicker(){renderCoPicker(companies);}
+function closeCoPicker(){document.getElementById('co-dropdown').classList.remove('open');}
+function toggleCoPicker(){
+  const dd=document.getElementById('co-dropdown');
+  if(dd.classList.contains('open')){closeCoPicker();}
+  else{document.getElementById('co-sel-display').style.display='none';document.getElementById('co-search').style.display='block';document.getElementById('co-search').value='';renderCoPicker(companies);document.getElementById('co-search').focus();}
+}
+function filterCoPicker(q){renderCoPicker(q?companies.filter(c=>c.name.toLowerCase().includes(q.toLowerCase())):companies);}
+function selectCo(id){
+  const co=companies.find(c=>c.id===id);if(!co)return;
+  curCo=co;
+  const init=co.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  const d=document.getElementById('co-sel-display');
+  d.style.display='flex';
+  d.innerHTML=(co.logo?`<img src="${co.logo}" style="width:16px;height:16px;border-radius:2px;object-fit:cover"/>`:
+    `<div style="width:10px;height:10px;border-radius:2px;background:${co.color}"></div>`)+
+    `<span style="font-size:12px">${co.name}</span><i class="ti ti-x" style="font-size:11px;color:var(--t3);margin-left:auto" onclick="clearCo(event)"></i>`;
+  document.getElementById('co-search').style.display='none';
+  closeCoPicker();
+}
+function clearCo(e){e.stopPropagation();curCo=null;document.getElementById('co-sel-display').style.display='none';document.getElementById('co-search').style.display='block';document.getElementById('co-search').value='';}
+
+/* ── COMPANY MODAL ─────────────────────── */
+function openCoModal(){
+  closeCoPicker();
+  document.getElementById('co-name-inp').value='';
+  document.getElementById('logo-preview').style.display='none';
+  document.getElementById('logo-hint').style.display='block';
+  selLogoB64=null;selCoColor=CO_COLORS[5];
+  document.querySelectorAll('.co-color').forEach((el,i)=>el.classList.toggle('sel',CO_COLORS[i]===selCoColor));
+  document.getElementById('co-modal').classList.add('open');
+}
+function closeCoModal(){document.getElementById('co-modal').classList.remove('open');}
+function pickCoColor(c,el){selCoColor=c;document.querySelectorAll('.co-color').forEach(e=>e.classList.remove('sel'));el.classList.add('sel');}
+function handleLogo(inp){
+  const f=inp.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{selLogoB64=e.target.result;document.getElementById('logo-preview').src=selLogoB64;document.getElementById('logo-preview').style.display='block';document.getElementById('logo-hint').style.display='none';};
+  r.readAsDataURL(f);
+}
+function saveCompany(){
+  const name=document.getElementById('co-name-inp').value.trim();
+  if(!name){toast('Enter a company name.');return;}
+  const co={id:Date.now(),name,color:selCoColor,logo:selLogoB64||null};
+  companies.push(co);saveData();renderCompanyList();updateStats();selectCo(co.id);closeCoModal();
+  toast(`Company "${name}" added.`);
+}
+
+
+/* ── ARCHIVE SYSTEM ─────────────────────── */
+let archived = [];
+let arcFilter = 'all';
+
+function loadArchive(){
+  try{ const d=localStorage.getItem('rvk_arc');archived=d?JSON.parse(d):[]; }catch(e){archived=[];}
+}
+function saveArchive(){ try{localStorage.setItem('rvk_arc',JSON.stringify(archived));}catch(e){} }
+
+function archiveProject(id, status='archived'){
+  const p=projects.find(x=>x.id===id);if(!p)return;
+  archived.unshift({...p, arc_status:status, arc_date:new Date().toISOString()});
+  projects=projects.filter(x=>x.id!==id);
+  saveData();saveArchive();refreshMarkers();renderProjectList();updateStats();renderArchiveList();
+  closeMini();closeFull();
+  toast(status==='deleted'?'Moved to deleted archive.':'Project archived.');
+}
+function archiveFromFull(){ if(currentFullId) archiveProject(currentFullId,'archived'); }
+function deleteProject(id){
+  if(!confirm('Delete this site? It will be recoverable from the Archive tab.'))return;
+  archiveProject(id,'deleted');
+}
+function restoreProject(id){
+  const p=archived.find(x=>x.id===id);if(!p)return;
+  const {arc_status,arc_date,...proj}=p;
+  projects.unshift(proj);
+  archived=archived.filter(x=>x.id!==id);
+  saveData();saveArchive();refreshMarkers();renderProjectList();updateStats();renderArchiveList();
+  toast('Project restored ✓');
+}
+function setArcFilter(f,btn){
+  arcFilter=f;
+  document.querySelectorAll('#pane-archive .fchip').forEach(c=>c.className='fchip');
+  btn.className='fchip on-all';
+  renderArchiveList();
+}
+function searchArchive(q){
+  if(!q.trim()){renderArchiveList();return;}
+  const lq=q.toLowerCase();
+  renderArchiveList(archived.filter(p=>p.title.toLowerCase().includes(lq)||(p.address||'').toLowerCase().includes(lq)));
+}
+function renderArchiveList(subset){
+  const list=(subset||archived).filter(p=>arcFilter==='all'||p.arc_status===arcFilter);
+  const el=document.getElementById('arc-list');
+  if(!list.length){el.innerHTML='<div class="empty"><i class="ti ti-archive"></i>Nothing here yet.</div>';return;}
+  el.innerHTML=list.map(p=>{
+    const dt=new Date(p.arc_date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+    const co=companies.find(c=>c.id===p.company_id);
+    return `<div class="arc-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+        <div style="min-width:0">
+          <div style="font-size:13px;font-weight:500;line-height:1.3">${p.title}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--t3);margin-top:2px">${p.address||'—'}</div>
+        </div>
+        <span class="arc-badge-${p.arc_status}">${p.arc_status}</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span style="font-size:11px;color:var(--t3)">${p.added_by||'—'} · ${dt}${co?' · '+co.name:''}</span>
+        <button class="arc-restore" onclick="restoreProject(${p.id})"><i class="ti ti-refresh" style="font-size:11px"></i> Restore</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ── WON / SECURED SYSTEM ──────────────── */
+let won = [];
+let wonMarkers = [];
+
+function loadWon(){
+  try{ const d=localStorage.getItem('rvk_won');won=d?JSON.parse(d):[]; }catch(e){won=[];}
+}
+function saveWon(){ try{localStorage.setItem('rvk_won',JSON.stringify(won));}catch(e){} }
+
+function winProject(id){
+  const p=projects.find(x=>x.id===id);if(!p)return;
+  if(!confirm(`Mark "${p.title}" as secured? It will move to the Won tab.`))return;
+  won.unshift({...p, won_date:new Date().toISOString(), won_by:(typeof currentUser!=='undefined'&&currentUser)?currentUser:(p.added_by||'—')});
+  projects=projects.filter(x=>x.id!==id);
+  saveData();saveWon();refreshMarkers();refreshWonMarkers();renderProjectList();updateStats();renderWonList();
+  closeMini();closeFull();
+  toast('Project secured ⚑');
+}
+function winFromFull(){ if(currentFullId) winProject(currentFullId); }
+
+function unwinProject(id){
+  const p=won.find(x=>x.id===id);if(!p)return;
+  const {won_date,won_by,...proj}=p;
+  projects.unshift(proj);
+  won=won.filter(x=>x.id!==id);
+  saveData();saveWon();refreshMarkers();refreshWonMarkers();renderProjectList();updateStats();renderWonList();
+  toast('Moved back to pipeline.');
+}
+function searchWon(q){
+  if(!q.trim()){renderWonList();return;}
+  const lq=q.toLowerCase();
+  renderWonList(won.filter(p=>p.title.toLowerCase().includes(lq)||(p.address||'').toLowerCase().includes(lq)));
+}
+function renderWonList(subset){
+  const list=subset||won;
+  const el=document.getElementById('won-list');
+  document.getElementById('won-ct').textContent=won.length;
+  if(!list.length){el.innerHTML='<div class="empty"><i class="ti ti-flag"></i>No secured projects yet.</div>';return;}
+  el.innerHTML=list.map(p=>{
+    const dt=new Date(p.won_date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+    const co=companies.find(c=>c.id===p.company_id);
+    return `<div class="arc-card" style="border-left:2px solid var(--red)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+        <div style="min-width:0">
+          <div style="font-size:13px;font-weight:500;line-height:1.3">${p.title}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--t3);margin-top:2px">${p.address||'—'}</div>
+        </div>
+        <span style="display:inline-flex;align-items:center;gap:4px;background:rgba(184,50,40,.15);color:var(--redh);font-size:10px;padding:2px 8px;border-radius:20px;font-family:'IBM Plex Mono',monospace;white-space:nowrap"><i class="ti ti-flag-filled" style="font-size:10px"></i> SECURED</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span style="font-size:11px;color:var(--t3)">${p.won_by||'—'} · ${dt}${co?' · '+co.name:''}</span>
+        <div style="display:flex;gap:6px">
+          <button class="arc-restore" onclick="map.flyTo([${p.lat},${p.lng}],15,{duration:.8})"><i class="ti ti-map-pin" style="font-size:11px"></i> View</button>
+          <button class="arc-restore" onclick="unwinProject(${p.id})"><i class="ti ti-arrow-back-up" style="font-size:11px"></i> Reopen</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function refreshWonMarkers(){
+  wonMarkers.forEach(m=>map.removeLayer(m));wonMarkers=[];
+  won.forEach(p=>{
+    if(typeof p.lat!=='number'||typeof p.lng!=='number')return;
+    const icon=L.divIcon({
+      className:'',
+      html:`<div style="width:26px;height:26px;border-radius:50%;background:rgba(184,50,40,.92);border:1.5px solid rgba(255,255,255,.85);box-shadow:0 0 14px rgba(184,50,40,.5);display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="ti ti-flag-filled" style="color:#fff;font-size:13px"></i></div>`,
+      iconSize:[26,26],iconAnchor:[13,13]
+    });
+    const m=L.marker([p.lat,p.lng],{icon}).addTo(map);
+    const dt=new Date(p.won_date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+    m.bindPopup(`<div style="font-family:'Space Grotesk',sans-serif"><div style="font-weight:500;font-size:13px;margin-bottom:3px">⚑ ${p.title}</div><div style="font-size:11px;color:#999">Secured ${dt}${p.won_by?' · '+p.won_by:''}</div></div>`);
+    wonMarkers.push(m);
+  });
+}
+
+/* ── DATA ──────────────────────────────── */
+function loadData(){
+  try{const pd=localStorage.getItem('rvk_p9');projects=pd?JSON.parse(pd):[];const cd=localStorage.getItem('rvk_c9');companies=cd?JSON.parse(cd):[];}catch(e){projects=[];companies=[];}
+  if(!projects.length)seedSamples();
+  renderAll();
+}
+function saveData(){
+  try{localStorage.setItem('rvk_p9',JSON.stringify(projects));localStorage.setItem('rvk_c9',JSON.stringify(companies));}catch(e){}
+}
+
+async function addProject(){
+  const title=document.getElementById('f-title').value.trim();
+  const addr=document.getElementById('f-addr').value.trim();
+  const notes=document.getElementById('f-notes').value.trim();
+  const type=document.getElementById('f-type').value;
+  if(!title){toast('Please enter a project title.');return;}
+  if(!selCoords){toast('Select a location — search an address or click the map.');return;}
+  const p={
+    id:Date.now(),title,address:addr,notes,type,
+    priority:curPri,source:curSrc,
+    company_id:curCo?curCo.id:null,
+    files:attachedFiles.map(f=>({name:f.name,size:f.size,b64:f.b64||null,type:f.type||''})),
+    comments:[],
+    lat:selCoords.lat,lng:selCoords.lng,
+    added_by:currentUser,
+    created_at:new Date().toISOString()
+  };
+  projects.unshift(p);saveData();placeMarker(p);renderAll();resetForm();
+  swTab('sites',document.querySelector('.sb-tab'));
+  map.flyTo([p.lat,p.lng],15,{duration:1});
+  toast('Site added ✓');
+}
+
+/* ── COMMENTS ──────────────────────────── */
+function addComment(projId){
+  const ta=document.getElementById('fd-comment-input');
+  const text=ta.value.trim();if(!text)return;
+  const p=projects.find(x=>x.id===projId);if(!p)return;
+  if(!p.comments)p.comments=[];
+  p.comments.push({id:Date.now(),text,author:currentUser,time:new Date().toISOString()});
+  saveData();ta.value='';
+  renderComments(projId);
+  toast('Comment added.');
+}
+
+function renderComments(projId){
+  const p=projects.find(x=>x.id===projId);if(!p)return;
+  const wrap=document.getElementById('fd-comments-wrap');if(!wrap)return;
+  const comments=p.comments||[];
+  wrap.innerHTML=comments.length?comments.map(c=>{
+    const dt=new Date(c.time).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `<div class="comment-item${c.author===currentUser?' mine':''}">
+      <div class="comment-meta">
+        <span class="comment-author">${c.author}</span>
+        <span class="comment-time">${dt}</span>
+      </div>
+      <div class="comment-text">${c.text}</div>
+    </div>`;
+  }).join(''):'<div style="font-size:12px;color:var(--t3);padding:8px 0">No comments yet — add the first one.</div>';
+}
+
+/* ── EDIT LOCATION ──────────────────────── */
+let editingProjId = null;
+function openEditModal(id) {
+  const p = projects.find(x=>x.id===id); if(!p) return;
+  editingProjId = id;
+  document.getElementById('edit-addr-inp').value = p.address || '';
+  document.getElementById('edit-lat').value = p.lat;
+  document.getElementById('edit-lon').value = p.lng;
+  document.getElementById('edit-geo-res').innerHTML = '';
+  document.getElementById('edit-pin-hint').style.display = 'none';
+  document.getElementById('edit-save-btn').disabled = false;
+  document.getElementById('edit-save-btn').style.opacity = '1';
+  document.getElementById('edit-save-btn').style.cursor = 'pointer';
+  document.getElementById('edit-modal').style.display = 'flex';
+  map.flyTo([p.lat, p.lng], 15, {duration:0.6});
+}
+function closeEditModal() {
+  document.getElementById('edit-modal').style.display = 'none';
+  editingProjId = null;
+}
+function saveEditLocation() {
+  const p = projects.find(x=>x.id===editingProjId); if(!p) return;
+  const lat = parseFloat(document.getElementById('edit-lat').value);
+  const lng = parseFloat(document.getElementById('edit-lon').value);
+  const addr = document.getElementById('edit-addr-inp').value.trim();
+  if(isNaN(lat)||isNaN(lng)){toast('Enter valid coordinates.');return;}
+  p.lat = lat; p.lng = lng;
+  if(addr) p.address = addr;
+  saveData(); refreshMarkers(); renderProjectList(); updateStats();
+  closeEditModal();
+  map.flyTo([lat,lng],16,{duration:0.8});
+  if(currentFullId===p.id) openFull(p.id);
+  toast('Location updated ✓');
+}
+
+/* ── BOOST / DELETE ────────────────────── */
+function boostPriority(id){
+  const p=projects.find(x=>x.id===id);if(!p)return;
+  const order=['low','medium','high','critical'];
+  const i=order.indexOf(p.priority);
+  if(i>=order.length-1){toast('Already critical.');return;}
+  p.priority=order[i+1];saveData();refreshMarkers();renderAll();
+  if(currentMiniId===id)openMini(p);
+  if(currentFullId===id)openFull(id);
+  toast('Priority → '+p.priority.toUpperCase());
+}
+function boostFromMini(){if(currentMiniId)boostPriority(currentMiniId);}
+function boostFromFull(){if(currentFullId)boostPriority(currentFullId);}
+function setSourceFull(src){
+  const p=projects.find(x=>x.id===currentFullId);if(!p)return;
+  p.source=src;saveData();refreshMarkers();renderProjectList();
+  openFull(currentFullId);
+  toast('Source set to '+{official:'Official',unofficial:'Unconfirmed',confirmed:'Confirmed'}[src]);
+}
+function saveFullEdits(id){
+  const p=projects.find(x=>x.id===id);if(!p)return;
+  const newTitle=document.getElementById('fd-edit-title').value.trim();
+  const newNotes=document.getElementById('fd-edit-notes').value.trim();
+  const newCo=document.getElementById('fd-edit-company').value;
+  if(!newTitle){toast('Title cannot be empty.');return;}
+  p.title=newTitle;
+  p.notes=newNotes;
+  p.company_id=newCo?parseInt(newCo):null;
+  saveData();renderProjectList();updateStats();
+  document.getElementById('fd-edit-title').value=p.title;
+  toast('Changes saved ✓');
+}
+function setPriorityFull(pri){
+  const p=projects.find(x=>x.id===currentFullId);if(!p)return;
+  p.priority=pri;saveData();refreshMarkers();renderProjectList();updateStats();
+  // highlight active button
+  ['low','medium','high','critical'].forEach(v=>{
+    const b=document.getElementById('fdp-'+v);if(!b)return;
+    b.style.fontWeight=v===pri?'600':'400';
+    b.style.borderColor=v===pri?'var(--b3)':'var(--b2)';
+    b.style.opacity=v===pri?'1':'0.6';
+  });
+  toast('Priority set to '+pri.toUpperCase());
+}
+
+function deleteProject(id){
+  if(!confirm('Remove this site?'))return;
+  projects=projects.filter(x=>x.id!==id);
+  saveData();refreshMarkers();renderAll();closeMini();closeFull();toast('Site removed.');
+}
+function deleteFromFull(){if(currentFullId)deleteProject(currentFullId);}
+
+/* ── MARKERS ───────────────────────────── */
+function clusterAt(lat,lng){return projects.filter(p=>Math.abs(p.lat-lat)<.0022&&Math.abs(p.lng-lng)<.003);}
+
+function placeMarker(proj){
+  const key=`${proj.lat.toFixed(3)}_${proj.lng.toFixed(3)}`;
+  if(markers[key])map.removeLayer(markers[key]);
+  const cl=clusterAt(proj.lat,proj.lng);
+  const count=cl.length;
+  const maxPri=cl.reduce((m,p)=>PRI_ORDER[p.priority]>PRI_ORDER[m]?p.priority:m,'low');
+  // colour by source of highest-priority item
+  const srcProj=cl.find(p=>p.priority===maxPri)||cl[0];
+  const sc=SRC_COLOR[srcProj.source]||SRC_COLOR.unofficial;
+  const base=PRI_RADIUS[maxPri];
+  const r=Math.min(base+(count-1)*6,54);
+  const alpha=Math.min(PRI_ALPHA[maxPri]+(count-1)*.04,.9);
+  const label=count>1?count:'';
+  const fs=r>18?13:10;
+  const icon=L.divIcon({
+    className:'',
+    html:`<div style="width:${r*2}px;height:${r*2}px;border-radius:50%;background:${sc.fill}${alpha});border:1.5px solid ${sc.border}${Math.min(alpha+.12,1)});box-shadow:0 0 ${r*1.1}px ${sc.fill}${alpha*.4});display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.93);font-size:${fs}px;font-family:'Space Grotesk',sans-serif;font-weight:500;cursor:pointer">${label}</div>`,
+    iconSize:[r*2,r*2],iconAnchor:[r,r]
+  });
+  const m=L.marker([proj.lat,proj.lng],{icon}).addTo(map);
+  m.on('click',()=>{
+    const cl2=clusterAt(proj.lat,proj.lng);
+    if(cl2.length===1){openMini(cl2[0]);}
+    else{
+      const html=`<div class="lpu-h">${cl2.length} sites nearby</div>`+
+        cl2.map(p=>`<div class="lpu-row" onclick="openMini(window.__p(${p.id}))">${p.title}</div>`).join('');
+      L.popup().setContent(html).setLatLng([proj.lat,proj.lng]).openOn(map);
+    }
+  });
+  markers[key]=m;
+}
+function refreshMarkers(){Object.values(markers).forEach(m=>map.removeLayer(m));markers={};projects.forEach(p=>placeMarker(p));}
+window.__p=id=>projects.find(p=>p.id===id);
+
+/* ── RENDER ────────────────────────────── */
+function renderAll(){refreshMarkers();refreshWonMarkers();renderProjectList();renderCompanyList();updateStats();renderArchiveList();renderWonList();}
+
+function getVisible(){
+  let list=[...projects];
+  if(['official','unofficial','confirmed'].includes(curFilter))return list.filter(p=>p.source===curFilter);
+  if(['critical','high','medium','low'].includes(curFilter))return list.filter(p=>p.priority===curFilter);
+  return list;
+}
+function renderProjectList(subset){
+  const list=subset!==undefined?subset:getVisible();
+  const el=document.getElementById('plist');
+  if(!list.length){el.innerHTML='<div class="empty"><i class="ti ti-map-pin"></i>No sites match.</div>';return;}
+  const sorted=[...list].sort((a,b)=>(PRI_ORDER[b.priority]||0)-(PRI_ORDER[a.priority]||0));
+  el.innerHTML=sorted.map(p=>{
+    const co=companies.find(c=>c.id===p.company_id);
+    const coHtml=co?`<div class="pc-co">${co.logo?`<img src="${co.logo}" style="width:12px;height:12px;border-radius:2px;object-fit:cover"/>`:
+      `<div class="co-sw" style="background:${co.color}"></div>`}<span class="co-nm">${co.name}</span></div>`:'';
+    const srcLabel={official:'Official',unofficial:'Unofficial',confirmed:'Confirmed'};
+    return `<div class="pcard" data-id="${p.id}" onclick="flyTo(${p.id})">
+      <div class="pc-top">
+        <div style="min-width:0"><div class="pc-name">${p.title}</div><div class="pc-addr">${p.address||'—'}</div>${coHtml}</div>
+        <span class="pri-tag pri-${p.priority}">${p.priority}</span>
+      </div>
+      <div class="pc-meta">
+        <span class="src-pip src-${p.source}">● ${srcLabel[p.source]||p.source}</span>
+        <span class="pc-user">${p.added_by||'—'}</span>
+        <span style="font-size:10px;color:var(--t3)">${(p.type||'').replace('-',' ')}</span>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('ct').textContent=projects.length;
+}
+
+function renderCompanyList(subset){
+  const list=subset!==undefined?subset:[...companies];
+  const el=document.getElementById('colist');
+  if(!list.length){el.innerHTML='<div class="empty"><i class="ti ti-building"></i>No companies yet.</div>';return;}
+  el.innerHTML=list.map(co=>{
+    const count=projects.filter(p=>p.company_id===co.id).length;
+    const init=co.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    return `<div class="co-card" onclick="filterByCompany(${co.id})">
+      <div class="co-avatar" style="background:${co.color}25;border:0.5px solid ${co.color}55">
+        ${co.logo?`<img src="${co.logo}"/>`:`<span style="color:${co.color}">${init}</span>`}
+      </div>
+      <div class="co-info"><div class="co-info-name">${co.name}</div><div class="co-info-sub">${count} site${count!==1?'s':''}</div></div>
+      <i class="ti ti-arrow-right" style="font-size:13px;color:var(--t3)"></i>
+    </div>`;
+  }).join('');
+}
+
+function updateStats(){
+  document.getElementById('s-t').textContent=projects.length;
+  document.getElementById('s-h').textContent=projects.filter(p=>p.priority==='high').length;
+  document.getElementById('s-c').textContent=projects.filter(p=>p.priority==='critical').length;
+  document.getElementById('s-w').textContent=won.length;
+  document.getElementById('s-co').textContent=companies.length;
+  document.getElementById('ct').textContent=projects.length;
+  document.getElementById('co-ct').textContent=companies.length;
+}
+
+/* ── MINI DETAIL ───────────────────────── */
+function openMini(proj){
+  currentMiniId=proj.id;
+  document.getElementById('md-title').textContent=proj.title;
+  document.getElementById('md-addr').textContent=proj.address||'—';
+  const co=companies.find(c=>c.id===proj.company_id);
+  const coEl=document.getElementById('md-co');
+  if(co){
+    coEl.style.display='inline-flex';
+    coEl.style.background=co.color+'22';
+    coEl.innerHTML=(co.logo?`<img src="${co.logo}" style="width:12px;height:12px;border-radius:2px;object-fit:cover"/>`:
+      `<div style="width:8px;height:8px;border-radius:2px;background:${co.color}"></div>`)+
+      `<span style="font-size:11px;color:${co.color}">${co.name}</span>`;
+  }else{coEl.style.display='none';}
+  const srcLabel={official:'Official',unofficial:'Unconfirmed',confirmed:'Confirmed'};
+  document.getElementById('md-meta').innerHTML=
+    `<span class="src-pip src-${proj.source}">● ${srcLabel[proj.source]}</span>`+
+    `<span class="pri-tag pri-${proj.priority}">${proj.priority}</span>`+
+    `<span style="font-size:10px;color:var(--t3)">${proj.added_by||'—'}</span>`+
+    ((proj.comments||[]).length?`<span style="font-size:10px;color:var(--t3)">${proj.comments.length} comment${proj.comments.length!==1?'s':''}</span>`:'');
+  document.getElementById('mini-detail').classList.add('open');
+  document.querySelectorAll('.pcard').forEach(c=>c.classList.remove('sel','sel-official','sel-unofficial','sel-confirmed'));
+  const card=document.querySelector(`.pcard[data-id="${proj.id}"]`);
+  if(card){card.classList.add('sel','sel-'+proj.source);card.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+function closeMini(){
+  document.getElementById('mini-detail').classList.remove('open');
+  currentMiniId=null;
+  document.querySelectorAll('.pcard').forEach(c=>c.classList.remove('sel','sel-official','sel-unofficial','sel-confirmed'));
+}
+
+/* ── FULL DETAIL ───────────────────────── */
+function openFull(id){
+  const proj=projects.find(x=>x.id===id);if(!proj)return;
+  currentFullId=id;
+  const srcLabel={official:'Official',unofficial:'Unconfirmed',confirmed:'Confirmed'};
+  const srcC=SRC_COLOR[proj.source]||SRC_COLOR.unofficial;
+  document.getElementById('fd-eyebrow-src').innerHTML=
+    `<span style="color:${srcC.hex};font-size:10px">● ${srcLabel[proj.source]}</span>`;
+  document.getElementById('fd-edit-title').value=proj.title;
+  document.getElementById('fd-addr').textContent=proj.address||'—';
+  const co=companies.find(c=>c.id===proj.company_id);
+  const files=Array.isArray(proj.files)?proj.files:[];
+  const addedAt=proj.created_at?new Date(proj.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
+  const coHtml=co?`<div style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;background:${co.color}18;border:0.5px solid ${co.color}44;margin-bottom:4px">
+    ${co.logo?`<img src="${co.logo}" style="width:16px;height:16px;border-radius:3px;object-fit:cover"/>`:
+      `<div style="width:10px;height:10px;border-radius:2px;background:${co.color}"></div>`}
+    <span style="font-size:12px;color:${co.color};font-weight:500">${co.name}</span>
+  </div>`:'';
+  document.getElementById('fd-body').innerHTML=`
+    ${coHtml}
+    <div class="fd-section">
+      <div class="fd-sec-title">Site Details</div>
+      <div class="fd-grid">
+        <div class="fd-field"><div class="fd-field-label">Priority</div><div class="fd-field-val"><span class="pri-tag pri-${proj.priority}" style="font-size:12px">${proj.priority.toUpperCase()}</span></div></div>
+        <div class="fd-field"><div class="fd-field-label">Type</div><div class="fd-field-val">${(proj.type||'').charAt(0).toUpperCase()+(proj.type||'').slice(1).replace('-',' ')}</div></div>
+        <div class="fd-field"><div class="fd-field-label">Added by</div><div class="fd-field-val" style="font-size:12px">${proj.added_by||'—'}</div></div>
+        <div class="fd-field"><div class="fd-field-label">Date added</div><div class="fd-field-val" style="font-size:12px">${addedAt}</div></div>
+        <div class="fd-field" style="grid-column:span 2"><div class="fd-field-label">Source</div>
+          <div style="display:flex;gap:5px;margin-top:4px">
+            <button onclick="setSourceFull('official')"  style="flex:1;padding:5px 4px;font-size:11px;border-radius:4px;cursor:pointer;font-family:'Space Grotesk',sans-serif;border:0.5px solid ${proj.source==='official'?'var(--green)':'var(--b2)'};background:${proj.source==='official'?'var(--greeng)':'none'};color:${proj.source==='official'?'var(--greenh)':'var(--t3)'}">Official</button>
+            <button onclick="setSourceFull('unofficial')" style="flex:1;padding:5px 4px;font-size:11px;border-radius:4px;cursor:pointer;font-family:'Space Grotesk',sans-serif;border:0.5px solid ${proj.source==='unofficial'?'var(--amber)':'var(--b2)'};background:${proj.source==='unofficial'?'var(--amberg)':'none'};color:${proj.source==='unofficial'?'var(--amberh)':'var(--t3)'}">Unconfirmed</button>
+            <button onclick="setSourceFull('confirmed')"  style="flex:1;padding:5px 4px;font-size:11px;border-radius:4px;cursor:pointer;font-family:'Space Grotesk',sans-serif;border:0.5px solid ${proj.source==='confirmed'?'var(--blue)':'var(--b2)'};background:${proj.source==='confirmed'?'var(--blueg)':'none'};color:${proj.source==='confirmed'?'var(--blueh)':'var(--t3)'}">Confirmed</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="fd-section">
+      <div class="fd-sec-title">Notes</div>
+      <textarea id="fd-edit-notes" style="width:100%;background:var(--s2);border:0.5px solid var(--b2);border-radius:var(--rm);padding:11px 13px;font-size:13px;font-family:'Space Grotesk',sans-serif;color:var(--t1);outline:none;resize:vertical;min-height:80px;line-height:1.6;transition:border-color .15s" onfocus="this.style.borderColor='var(--green)'" onblur="this.style.borderColor='var(--b2)'" placeholder="Add notes…">${proj.notes||''}</textarea>
+    </div>
+    <div class="fd-section">
+      <div class="fd-sec-title">Company</div>
+      <select id="fd-edit-company" style="width:100%;background:var(--s2);border:0.5px solid var(--b2);border-radius:var(--r);padding:8px 11px;font-size:13px;font-family:'Space Grotesk',sans-serif;color:var(--t1);outline:none;transition:border-color .15s" onfocus="this.style.borderColor='var(--green)'" onblur="this.style.borderColor='var(--b2)'">
+        <option value="">— No company —</option>
+        ${companies.map(c=>`<option value="${c.id}" ${c.id===proj.company_id?'selected':''}>${c.name}</option>`).join('')}
+      </select>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:-4px">
+      <button onclick="saveFullEdits(${proj.id})" style="padding:8px 18px;background:var(--green);border:none;border-radius:var(--r);font-size:12px;font-weight:500;font-family:'Space Grotesk',sans-serif;color:#fff;cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--greenh)'" onmouseout="this.style.background='var(--green)'">Save Changes</button>
+    </div>
+    ${files.length?`<div class="fd-section"><div class="fd-sec-title">Documents (${files.length})</div><div class="doc-grid">${files.map(f=>{const nm=typeof f==='string'?f:f.name;const b64=typeof f==='object'&&f.b64?f.b64:null;return b64?`<a href="${b64}" download="${nm}" style="text-decoration:none"><div class="doc-item" style="cursor:pointer" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--b1)'"><i class="ti ti-file-type-pdf"></i>${nm}<i class="ti ti-download" style="font-size:11px;margin-left:auto;color:var(--t3)"></i></div></a>`:`<div class="doc-item"><i class="ti ti-file-type-pdf"></i>${nm}</div>`;}).join('')}</div></div>`:''}
+    <div class="fd-section">
+      <div class="fd-sec-title">Comments & Updates</div>
+      <div class="comment-thread" id="fd-comments-wrap"></div>
+      <div class="comment-input-wrap" style="margin-top:12px">
+        <textarea class="comment-textarea" id="fd-comment-input" placeholder="Add a comment or update — your name will be recorded…"></textarea>
+        <button class="comment-submit" onclick="addComment(${proj.id})">Post Comment</button>
+      </div>
+    </div>
+  `;
+  renderComments(proj.id);
+  document.getElementById('full-detail-overlay').classList.add('open');
+  // highlight current priority buttons
+  ['low','medium','high','critical'].forEach(v=>{
+    const b=document.getElementById('fdp-'+v);if(!b)return;
+    b.style.fontWeight=v===proj.priority?'600':'400';
+    b.style.borderColor=v===proj.priority?'var(--b3)':'var(--b2)';
+    b.style.opacity=v===proj.priority?'1':'0.6';
+  });
+}
+function closeFull(){document.getElementById('full-detail-overlay').classList.remove('open');currentFullId=null;}
+
+function flyTo(id){
+  const p=projects.find(x=>x.id===id);if(!p)return;
+  map.flyTo([p.lat,p.lng],15,{duration:.8});
+  setTimeout(()=>openMini(p),350);
+}
+
+/* ── SEARCH / FILTER ───────────────────── */
+function setFilter(f,btn,cls){
+  curFilter=f;curFilterClass=cls;
+  document.querySelectorAll('.fchip').forEach(c=>c.className='fchip');
+  btn.className='fchip '+cls;
+  renderProjectList();
+}
+function searchSites(q){
+  if(!q.trim()){renderProjectList();return;}
+  const lq=q.toLowerCase();
+  const co_ids=companies.filter(c=>c.name.toLowerCase().includes(lq)).map(c=>c.id);
+  renderProjectList(projects.filter(p=>
+    p.title.toLowerCase().includes(lq)||(p.address||'').toLowerCase().includes(lq)||
+    (p.type||'').toLowerCase().includes(lq)||(p.notes||'').toLowerCase().includes(lq)||
+    (p.comments||[]).some(c=>c.text.toLowerCase().includes(lq))||co_ids.includes(p.company_id)
+  ));
+}
+function searchCompanies(q){
+  if(!q.trim()){renderCompanyList();return;}
+  renderCompanyList(companies.filter(c=>c.name.toLowerCase().includes(q.toLowerCase())));
+}
+function filterByCompany(id){
+  swTab('sites',document.querySelector('.sb-tab'));
+  curFilter='all';document.querySelectorAll('.fchip').forEach((c,i)=>{c.className='fchip'+(i===0?' on-all':'');});
+  renderProjectList(projects.filter(p=>p.company_id===id));
+  toast('Showing sites for '+companies.find(c=>c.id===id)?.name);
+}
+
+/* ── UI HELPERS ────────────────────────── */
+function swTab(name,btn){
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.sb-tab').forEach(b=>b.classList.remove('on'));
+  document.getElementById('pane-'+name).classList.add('on');
+  const labels={sites:'Sites',won:'Won',companies:'Companies',add:'Add',archive:'Archive'};
+  document.querySelectorAll('.sb-tab').forEach(b=>{
+    if(b.textContent.includes(labels[name]||''))b.classList.add('on');
+  });
+  document.getElementById('mhint').classList.toggle('show',name==='add');
+}
+function setPri(v,btn){curPri=v;document.querySelectorAll('#pri-row .pbtn-pri').forEach(b=>b.classList.remove('on'));btn.classList.add('on');}
+function setSrc(v,btn){
+  curSrc=v;
+  document.querySelectorAll('#src-row .pbtn-src').forEach(b=>b.className='pbtn pbtn-src');
+  btn.className=`pbtn pbtn-src on-${v}`;
+}
+function addFiles(inp){
+  for(const f of inp.files){
+    if(attachedFiles.find(x=>x.name===f.name))continue;
+    const reader=new FileReader();
+    reader.onload=e=>{
+      attachedFiles.push({name:f.name,size:f.size,type:f.type,b64:e.target.result});
+      renderFileChips();
+    };
+    reader.readAsDataURL(f);
+  }
+}
+function removeFile(name){attachedFiles=attachedFiles.filter(f=>f.name!==name);renderFileChips();}
+function renderFileChips(){
+  document.getElementById('file-chips').innerHTML=attachedFiles.map(f=>
+    `<div class="fchip2"><i class="ti ti-file" style="font-size:11px"></i>${f.name}<i class="ti ti-x" onclick="removeFile('${f.name.replace(/'/g,"\\'")}')"></i></div>`
+  ).join('');
+}
+function resetForm(){
+  ['f-title','f-addr','f-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('coord-hint').style.display='none';
+  document.getElementById('geo-res').innerHTML='';
+  selCoords=null;attachedFiles=[];curCo=null;curPri='low';curSrc='official';
+  document.getElementById('file-chips').innerHTML='';
+  document.getElementById('co-sel-display').style.display='none';
+  document.getElementById('co-search').style.display='block';
+  document.getElementById('co-search').value='';
+  document.querySelectorAll('#pri-row .pbtn-pri').forEach((b,i)=>b.classList.toggle('on',i===0));
+  document.querySelectorAll('#src-row .pbtn-src').forEach((b,i)=>{b.className='pbtn pbtn-src'+(i===0?' on-official':'');});
+}
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2800);}
+
+
+/* ── SAMPLE DATA ───────────────────────── */
+function seedSamples(){
+  companies=[
+    {id:201,name:'Bjarg',color:'#c0392b',logo:null},
+  ];
+  projects=[
+    {id:1,title:'Langimói 13-15 — Móahverfi, Akureyri',address:'Langimói 13-15, Akureyri',notes:'12 íbúðir. Í undirbúningi — þetta er eina verkefnið sem er í virkum undirbúningi á þessum lista. Einbýlishúsasvæði í Móahverfi, Akureyri. Eina verkefnið utan höfuðborgarsvæðisins.',type:'residential',priority:'high',source:'confirmed',company_id:201,files:[],comments:[],lat:65.6920,lng:-18.0682,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
+    {id:2,title:'Rangársel — 50 íbúðir',address:'Rangársel, Reykjavík',notes:'50 íbúðir. Í bið. Rangársel er íbúðahverfi í Neðra-Breiðholti (póstnúmer 109), suðaustur Reykjavík.',type:'residential',priority:'medium',source:'confirmed',company_id:201,files:[],comments:[],lat:64.1022,lng:-21.8552,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
+    {id:3,title:'Gufunes II — 60 íbúðir',address:'Gufunes, Reykjavík',notes:'60 íbúðir. Í bið. Gufunes er þróunarsvæði í norðausturhluta Reykjavíkur við Eiðsvík. Þetta er annar áfangi Bjargar á svæðinu.',type:'residential',priority:'medium',source:'confirmed',company_id:201,files:[],comments:[],lat:64.14694,lng:-21.81250,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
+    {id:4,title:'Skerjafjörður I — 92 íbúðir',address:'Skerjafjörður, Reykjavík',notes:'92 íbúðir. Í bið. Stærsta einstaka verkefni á þessum lista. Skerjafjörður er fjörður og íbúðasvæði á mörkum Reykjavíkur og Kópavogs, við sjóinn í suðvestri.',type:'residential',priority:'high',source:'confirmed',company_id:201,files:[],comments:[],lat:64.1120,lng:-21.9980,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
+    {id:5,title:'Korpureitur — 50 íbúðir',address:'Korpureitur, Reykjavík',notes:'50 íbúðir. Í bið. Korpureitur er í austurhluta Reykjavíkur nálægt Korpu og Grafarvogi.',type:'residential',priority:'medium',source:'confirmed',company_id:201,files:[],comments:[],lat:64.1485,lng:-21.8398,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
+    {id:6,title:'Vogur — Neðrasvæðið á Ártúnshöfðanum, 73 íbúðir',address:'Ártúnshöfði, Reykjavík',notes:'73 íbúðir. Í bið. Neðrasvæðið á Ártúnshöfðanum við Voginn í austurhluta Reykjavíkur. Umbreyting úr iðnaðarnotkun í blönduða notkun.',type:'mixed-use',priority:'medium',source:'confirmed',company_id:201,files:[],comments:[],lat:64.1502,lng:-21.8240,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
+    {id:7,title:'Safamýri — Framreiturinn, 50 íbúðir',address:'Safamýri, Reykjavík',notes:'50 íbúðir. Í bið. Framreiturinn á Safamýri, í Efra-Breiðholti (póstnúmer 111), suðaustur Reykjavík.',type:'residential',priority:'medium',source:'confirmed',company_id:201,files:[],comments:[],lat:64.0998,lng:-21.8730,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
+    {id:8,title:'Miklubrautarstokkur — 70 íbúðir',address:'Miklabraut, Reykjavík',notes:'70 íbúðir. Í bið. Meðfram Miklabraut (þjóðvegur 40), aðalumferðaræð Reykjavíkur í austur-vestur átt, í miðhluta borgarinnar.',type:'residential',priority:'medium',source:'confirmed',company_id:201,files:[],comments:[],lat:64.1365,lng:-21.8778,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
+    {id:9,title:'Skerjafjörður II — 72 íbúðir',address:'Skerjafjörður, Reykjavík',notes:'72 íbúðir. Í bið. Annar áfangi Bjargar í Skerjafjörður — staðsettur örlítið austar en áfangi I. Saman eru þetta 164 íbúðir á svæðinu.',type:'residential',priority:'medium',source:'confirmed',company_id:201,files:[],comments:[],lat:64.1095,lng:-21.9880,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
+    {id:10,title:'Sæbrautarstokkur — 40 íbúðir',address:'Sæbraut, Reykjavík',notes:'40 íbúðir. Í bið. Meðfram Sæbraut við norðurströnd Reykjavíkur, á milli miðbæjar og Laugarness. Sjávarútsýni og nálægð við miðbæ.',type:'residential',priority:'medium',source:'confirmed',company_id:201,files:[],comments:[],lat:64.1512,lng:-21.9148,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
+    {id:11,title:'Veðurstofuhæð — 50 íbúðir (í skipulagsferli)',address:'Bústaðavegur 9, Reykjavík',notes:'50 íbúðir. Í bið. Í skipulagsferli — lengra komið en hin verkefnin. Lóð við Veðurstofu Íslands á Bústaðavegi, í Fossvogi.',type:'residential',priority:'high',source:'official',company_id:201,files:[],comments:[],lat:64.1192,lng:-21.9205,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
+    {id:12,title:'U-reitur — Vatnsmýrin, 50 íbúðir',address:'Vatnsmýrarvegur, Reykjavík',notes:'50 íbúðir. Í bið. Milli BSÍ rútustöðvarinnar (64.1373,-21.9344) og N1 bensínstöðvarinnar í Vatnsmýrinni. Mjög miðlæg staðsetning.',type:'mixed-use',priority:'medium',source:'confirmed',company_id:201,files:[],comments:[],lat:64.1368,lng:-21.9298,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
+    {id:13,title:'Óstaðsett verkefni — 50 íbúðir',address:'Reykjavík (staðsetning óþekkt)',notes:'50 íbúðir. Í bið. Staðsetning innan Reykjavíkur hefur ekki verið gefin upp opinberlega. Merkt á miðpunkt Reykjavíkur þar til nákvæmari upplýsingar liggja fyrir.',type:'residential',priority:'low',source:'unofficial',company_id:201,files:[],comments:[],lat:64.1355,lng:-21.8954,added_by:'Studio',created_at:'2025-06-01T09:00:00Z'},
+  ];
+  saveData();
+}
+</script>
+</body>
+</html>
