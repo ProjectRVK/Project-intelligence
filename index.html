@@ -417,11 +417,12 @@ body{font-family:'Space Grotesk',sans-serif;background:#0a0a0a;color:#f0ede8;fon
       </div>
     </div>
     <div class="sb-tabs">
-      <button class="sb-tab on"  onclick="swTab('sites',this)">Sites</button>
-      <button class="sb-tab"     onclick="swTab('won',this)">Won</button>
-      <button class="sb-tab"     onclick="swTab('companies',this)">Companies</button>
-      <button class="sb-tab"     onclick="swTab('add',this)">+ Add</button>
-      <button class="sb-tab"     onclick="swTab('archive',this)">Archive</button>
+      <button class="sb-tab on" data-tab="sites"     onclick="swTab('sites',this)">Sites</button>
+      <button class="sb-tab"    data-tab="inprog"    onclick="swTab('inprog',this)">ASK Verkefni</button>
+      <button class="sb-tab"    data-tab="won"       onclick="swTab('won',this)">Won</button>
+      <button class="sb-tab"    data-tab="companies" onclick="swTab('companies',this)">Companies</button>
+      <button class="sb-tab"    data-tab="add"       onclick="swTab('add',this)">+ Add</button>
+      <button class="sb-tab"    data-tab="archive"   onclick="swTab('archive',this)">Archive</button>
     </div>
 
     <!-- SITES -->
@@ -436,6 +437,15 @@ body{font-family:'Space Grotesk',sans-serif;background:#0a0a0a;color:#f0ede8;fon
         <button class="fchip" onclick="setFilter('high',this,'on-pri')">High</button>
       </div>
       <div class="plist" id="plist"><div class="empty"><i class="ti ti-map-pin"></i>No sites yet.</div></div>
+    </div>
+
+    <!-- ASK VERKEFNI (in-progress) -->
+    <div class="pane" id="pane-inprog">
+      <div class="sbar"><div class="srel"><input type="text" placeholder="Search in-progress projects…" oninput="searchInprog(this.value)"/><i class="ti ti-search"></i></div></div>
+      <div style="padding:8px 12px 6px;border-bottom:0.5px solid var(--b1);font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.16em;color:var(--t3);text-transform:uppercase;display:flex;align-items:center;gap:6px">
+        <i class="ti ti-progress" style="color:var(--blue);font-size:11px"></i> Currently in progress · <span id="inprog-ct">0</span>
+      </div>
+      <div class="plist" id="inprog-list"><div class="empty"><i class="ti ti-progress"></i>No projects in progress yet.</div></div>
     </div>
 
     <!-- COMPANIES -->
@@ -501,7 +511,14 @@ body{font-family:'Space Grotesk',sans-serif;background:#0a0a0a;color:#f0ede8;fon
           <input type="file" id="f-files" style="display:none" multiple accept=".pdf,.doc,.docx,.txt,.jpg,.png" onchange="addFiles(this)"/>
           <div class="fchips2" id="file-chips"></div>
         </div>
-        <button class="subtn" onclick="addProject()">Add Site to Map</button>
+        <div style="display:flex;align-items:center;gap:9px;padding:10px 12px;background:var(--s2);border:0.5px solid var(--b2);border-radius:var(--r);cursor:pointer" onclick="var c=document.getElementById('f-wip');c.checked=!c.checked;updateSubmitLabel();">
+          <input type="checkbox" id="f-wip" onclick="event.stopPropagation();updateSubmitLabel();" style="width:15px;height:15px;accent-color:var(--blue);cursor:pointer"/>
+          <div style="flex:1;pointer-events:none">
+            <div style="font-size:12px;color:var(--t1);font-weight:500">Work in progress</div>
+            <div style="font-size:10px;color:var(--t3);margin-top:1px">Show in ASK Verkefni instead of Sites pipeline</div>
+          </div>
+        </div>
+        <button class="subtn" id="f-submit" onclick="addProject()">Add Site to Map</button>
         <div style="height:8px"></div>
       </div>
     </div>
@@ -539,6 +556,7 @@ body{font-family:'Space Grotesk',sans-serif;background:#0a0a0a;color:#f0ede8;fon
       <div class="stat"><div class="stat-n" id="s-t">0</div><div class="stat-l">Sites</div></div>
       <div class="stat"><div class="stat-n" id="s-h">0</div><div class="stat-l">High</div></div>
       <div class="stat"><div class="stat-n" id="s-c">0</div><div class="stat-l">Critical</div></div>
+      <div class="stat"><div class="stat-n" id="s-i" style="color:var(--blueh)">0</div><div class="stat-l">In Progress</div></div>
       <div class="stat"><div class="stat-n" id="s-w" style="color:var(--redh)">0</div><div class="stat-l">Won</div></div>
       <div class="stat"><div class="stat-n" id="s-co">0</div><div class="stat-l">Companies</div></div>
     </div>
@@ -626,6 +644,8 @@ let map, sb;
 let projects  = [];
 let companies = [];
 let markers   = {};
+let inprogMarkers = [];
+let mapMode = 'pipeline'; // 'pipeline' shows non-wip + won; 'inprog' shows wip only
 let selCoords = null;
 let curPri = 'low', curSrc = 'official', curFilter = 'all', curFilterClass = 'on-all';
 let curCo  = null;
@@ -1070,8 +1090,35 @@ function renderWonList(subset){
     </div>`;
   }).join('');
 }
+function renderInprogList(subset){
+  const list=subset||inprogProjects();
+  const el=document.getElementById('inprog-list');
+  document.getElementById('inprog-ct').textContent=inprogProjects().length;
+  if(!list.length){el.innerHTML='<div class="empty"><i class="ti ti-progress"></i>No projects in progress yet.</div>';return;}
+  el.innerHTML=list.map(p=>{
+    const co=companies.find(c=>c.id===p.company_id);
+    const dt=p.created_at?new Date(p.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
+    return `<div class="arc-card" style="border-left:2px solid var(--blue);cursor:pointer" onclick="flyTo(${p.id})">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+        <div style="min-width:0">
+          <div style="font-size:13px;font-weight:500;line-height:1.3">${p.title}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--t3);margin-top:2px">${p.address||'—'}</div>
+        </div>
+        <span style="display:inline-flex;align-items:center;gap:4px;background:var(--blueg);color:var(--blueh);font-size:10px;padding:2px 8px;border-radius:20px;font-family:'IBM Plex Mono',monospace;white-space:nowrap"><i class="ti ti-progress" style="font-size:10px"></i> IN PROGRESS</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span style="font-size:11px;color:var(--t3)">${p.added_by||'—'} · ${dt}${co?' · '+co.name:''}</span>
+        <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
+          <button class="arc-restore" onclick="map.flyTo([${p.lat},${p.lng}],15,{duration:.8})"><i class="ti ti-map-pin" style="font-size:11px"></i> View</button>
+          <button class="arc-restore" onclick="openFull(${p.id})"><i class="ti ti-arrows-maximize" style="font-size:11px"></i> Details</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
 function refreshWonMarkers(){
   wonMarkers.forEach(m=>map.removeLayer(m));wonMarkers=[];
+  if(mapMode!=='pipeline')return;
   won.forEach(p=>{
     if(typeof p.lat!=='number'||typeof p.lng!=='number')return;
     const icon=L.divIcon({
@@ -1149,7 +1196,8 @@ async function migrateIfNeeded(){
     priority:p.priority||'low',source:p.source||'official',company_id:p.company_id||null,
     lat:p.lat??null,lng:p.lng??null,files:p.files||[],comments:p.comments||[],
     added_by:p.added_by||null,created_at:p.created_at||new Date().toISOString(),
-    status,arc_date:p.arc_date||null,won_date:p.won_date||null,won_by:p.won_by||null
+    status,arc_date:p.arc_date||null,won_date:p.won_date||null,won_by:p.won_by||null,
+    wip:!!p.wip
   });
   const rows=[
     ...lp.map(p=>toRow(p,'active')),
@@ -1167,6 +1215,7 @@ async function addProject(){
   const addr=document.getElementById('f-addr').value.trim();
   const notes=document.getElementById('f-notes').value.trim();
   const type=document.getElementById('f-type').value;
+  const wip=document.getElementById('f-wip').checked;
   if(!title){toast('Please enter a project title.');return;}
   if(!selCoords){toast('Select a location — search an address or click the map.');return;}
   const p={
@@ -1177,13 +1226,15 @@ async function addProject(){
     comments:[],
     lat:selCoords.lat,lng:selCoords.lng,
     added_by:currentUser,
-    created_at:new Date().toISOString()
+    created_at:new Date().toISOString(),
+    wip:wip
   };
   p.status='active';
-  projects.unshift(p);dbInsertProject(p);placeMarker(p);renderAll();resetForm();
-  swTab('sites',document.querySelector('.sb-tab'));
+  projects.unshift(p);dbInsertProject(p);resetForm();
+  swTab(wip?'inprog':'sites');
+  renderAll();
   map.flyTo([p.lat,p.lng],15,{duration:1});
-  toast('Site added ✓');
+  toast(wip?'Added to ASK Verkefni ✓':'Site added ✓');
 }
 
 /* ── COMMENTS ──────────────────────────── */
@@ -1296,8 +1347,21 @@ function setPriorityFull(pri){
 
 function deleteFromFull(){if(currentFullId)deleteProject(currentFullId);}
 
+function toggleWip(id){
+  const p=projects.find(x=>x.id===id);if(!p)return;
+  p.wip=!p.wip;
+  dbUpdateProject(id,{wip:p.wip});
+  closeMini();closeFull();
+  // Switch to the tab that now shows this project
+  swTab(p.wip?'inprog':'sites');
+  renderAll();
+  toast(p.wip?'Moved to ASK Verkefni ✓':'Moved to pipeline ✓');
+}
+
 /* ── MARKERS ───────────────────────────── */
-function clusterAt(lat,lng){return projects.filter(p=>Math.abs(p.lat-lat)<.0022&&Math.abs(p.lng-lng)<.003);}
+function pipelineProjects(){return projects.filter(p=>!p.wip);}
+function inprogProjects(){return projects.filter(p=>p.wip);}
+function clusterAt(lat,lng){return pipelineProjects().filter(p=>Math.abs(p.lat-lat)<.0022&&Math.abs(p.lng-lng)<.003);}
 
 function placeMarker(proj){
   const key=`${proj.lat.toFixed(3)}_${proj.lng.toFixed(3)}`;
@@ -1330,14 +1394,33 @@ function placeMarker(proj){
   });
   markers[key]=m;
 }
-function refreshMarkers(){Object.values(markers).forEach(m=>map.removeLayer(m));markers={};projects.forEach(p=>placeMarker(p));}
+function refreshMarkers(){
+  Object.values(markers).forEach(m=>map.removeLayer(m));markers={};
+  if(mapMode!=='pipeline')return;
+  pipelineProjects().forEach(p=>placeMarker(p));
+}
+function refreshInprogMarkers(){
+  inprogMarkers.forEach(m=>map.removeLayer(m));inprogMarkers=[];
+  if(mapMode!=='inprog')return;
+  inprogProjects().forEach(p=>{
+    if(typeof p.lat!=='number'||typeof p.lng!=='number')return;
+    const icon=L.divIcon({
+      className:'',
+      html:`<div style="width:24px;height:24px;border-radius:50%;background:rgba(36,113,163,.9);border:1.5px solid rgba(41,128,185,.95);box-shadow:0 0 14px rgba(36,113,163,.45);display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="ti ti-progress" style="color:#fff;font-size:12px"></i></div>`,
+      iconSize:[24,24],iconAnchor:[12,12]
+    });
+    const m=L.marker([p.lat,p.lng],{icon}).addTo(map);
+    m.on('click',()=>openMini(p));
+    inprogMarkers.push(m);
+  });
+}
 window.__p=id=>projects.find(p=>p.id===id);
 
 /* ── RENDER ────────────────────────────── */
-function renderAll(){refreshMarkers();refreshWonMarkers();renderProjectList();renderCompanyList();updateStats();renderArchiveList();renderWonList();}
+function renderAll(){refreshMarkers();refreshWonMarkers();refreshInprogMarkers();renderProjectList();renderCompanyList();updateStats();renderArchiveList();renderWonList();renderInprogList();}
 
 function getVisible(){
-  let list=[...projects];
+  let list=pipelineProjects();
   if(['official','unofficial','confirmed'].includes(curFilter))return list.filter(p=>p.source===curFilter);
   if(['critical','high','medium','low'].includes(curFilter))return list.filter(p=>p.priority===curFilter);
   return list;
@@ -1385,12 +1468,14 @@ function renderCompanyList(subset){
 }
 
 function updateStats(){
-  document.getElementById('s-t').textContent=projects.length;
-  document.getElementById('s-h').textContent=projects.filter(p=>p.priority==='high').length;
-  document.getElementById('s-c').textContent=projects.filter(p=>p.priority==='critical').length;
+  const pipe=pipelineProjects();
+  document.getElementById('s-t').textContent=pipe.length;
+  document.getElementById('s-h').textContent=pipe.filter(p=>p.priority==='high').length;
+  document.getElementById('s-c').textContent=pipe.filter(p=>p.priority==='critical').length;
+  document.getElementById('s-i').textContent=inprogProjects().length;
   document.getElementById('s-w').textContent=won.length;
   document.getElementById('s-co').textContent=companies.length;
-  document.getElementById('ct').textContent=projects.length;
+  document.getElementById('ct').textContent=pipe.length;
   document.getElementById('co-ct').textContent=companies.length;
 }
 
@@ -1472,7 +1557,8 @@ function openFull(id){
         ${companies.map(c=>`<option value="${c.id}" ${c.id===proj.company_id?'selected':''}>${c.name}</option>`).join('')}
       </select>
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:-4px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:-4px">
+      <button onclick="toggleWip(${proj.id})" style="padding:8px 14px;background:none;border:0.5px solid ${proj.wip?'var(--blue)':'var(--b2)'};border-radius:var(--r);font-size:11px;font-weight:500;font-family:'Space Grotesk',sans-serif;color:${proj.wip?'var(--blueh)':'var(--t2)'};cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px" title="Toggle work-in-progress status"><i class="ti ti-progress" style="font-size:12px"></i>${proj.wip?'Move to pipeline (Sites)':'Move to ASK Verkefni'}</button>
       <button onclick="saveFullEdits(${proj.id})" style="padding:8px 18px;background:var(--green);border:none;border-radius:var(--r);font-size:12px;font-weight:500;font-family:'Space Grotesk',sans-serif;color:#fff;cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--greenh)'" onmouseout="this.style.background='var(--green)'">Save Changes</button>
     </div>
     ${files.length?`<div class="fd-section"><div class="fd-sec-title">Documents (${files.length})</div><div class="doc-grid">${files.map(f=>{const nm=typeof f==='string'?f:f.name;const b64=typeof f==='object'&&f.b64?f.b64:null;return b64?`<a href="${b64}" download="${nm}" style="text-decoration:none"><div class="doc-item" style="cursor:pointer" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--b1)'"><i class="ti ti-file-type-pdf"></i>${nm}<i class="ti ti-download" style="font-size:11px;margin-left:auto;color:var(--t3)"></i></div></a>`:`<div class="doc-item"><i class="ti ti-file-type-pdf"></i>${nm}</div>`;}).join('')}</div></div>`:''}
@@ -1514,7 +1600,17 @@ function searchSites(q){
   if(!q.trim()){renderProjectList();return;}
   const lq=q.toLowerCase();
   const co_ids=companies.filter(c=>c.name.toLowerCase().includes(lq)).map(c=>c.id);
-  renderProjectList(projects.filter(p=>
+  renderProjectList(pipelineProjects().filter(p=>
+    p.title.toLowerCase().includes(lq)||(p.address||'').toLowerCase().includes(lq)||
+    (p.type||'').toLowerCase().includes(lq)||(p.notes||'').toLowerCase().includes(lq)||
+    (p.comments||[]).some(c=>c.text.toLowerCase().includes(lq))||co_ids.includes(p.company_id)
+  ));
+}
+function searchInprog(q){
+  if(!q.trim()){renderInprogList();return;}
+  const lq=q.toLowerCase();
+  const co_ids=companies.filter(c=>c.name.toLowerCase().includes(lq)).map(c=>c.id);
+  renderInprogList(inprogProjects().filter(p=>
     p.title.toLowerCase().includes(lq)||(p.address||'').toLowerCase().includes(lq)||
     (p.type||'').toLowerCase().includes(lq)||(p.notes||'').toLowerCase().includes(lq)||
     (p.comments||[]).some(c=>c.text.toLowerCase().includes(lq))||co_ids.includes(p.company_id)
@@ -1527,7 +1623,7 @@ function searchCompanies(q){
 function filterByCompany(id){
   swTab('sites',document.querySelector('.sb-tab'));
   curFilter='all';document.querySelectorAll('.fchip').forEach((c,i)=>{c.className='fchip'+(i===0?' on-all':'');});
-  renderProjectList(projects.filter(p=>p.company_id===id));
+  renderProjectList(pipelineProjects().filter(p=>p.company_id===id));
   toast('Showing sites for '+companies.find(c=>c.id===id)?.name);
 }
 
@@ -1536,11 +1632,15 @@ function swTab(name,btn){
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.sb-tab').forEach(b=>b.classList.remove('on'));
   document.getElementById('pane-'+name).classList.add('on');
-  const labels={sites:'Sites',won:'Won',companies:'Companies',add:'Add',archive:'Archive'};
-  document.querySelectorAll('.sb-tab').forEach(b=>{
-    if(b.textContent.includes(labels[name]||''))b.classList.add('on');
-  });
+  const tabBtn = document.querySelector(`.sb-tab[data-tab="${name}"]`);
+  if(tabBtn) tabBtn.classList.add('on');
   document.getElementById('mhint').classList.toggle('show',name==='add');
+  // Switch map mode: only ASK Verkefni tab shows in-progress markers
+  const newMode = name==='inprog' ? 'inprog' : 'pipeline';
+  if(newMode !== mapMode){
+    mapMode = newMode;
+    refreshMarkers(); refreshWonMarkers(); refreshInprogMarkers();
+  }
 }
 function setPri(v,btn){curPri=v;document.querySelectorAll('#pri-row .pbtn-pri').forEach(b=>b.classList.remove('on'));btn.classList.add('on');}
 function setSrc(v,btn){
@@ -1576,6 +1676,13 @@ function resetForm(){
   document.getElementById('co-search').value='';
   document.querySelectorAll('#pri-row .pbtn-pri').forEach((b,i)=>b.classList.toggle('on',i===0));
   document.querySelectorAll('#src-row .pbtn-src').forEach((b,i)=>{b.className='pbtn pbtn-src'+(i===0?' on-official':'');});
+  const wipBox=document.getElementById('f-wip');if(wipBox){wipBox.checked=false;updateSubmitLabel();}
+}
+function updateSubmitLabel(){
+  const wip=document.getElementById('f-wip'), btn=document.getElementById('f-submit');
+  if(!wip||!btn)return;
+  btn.textContent=wip.checked?'Add In-Progress Project':'Add Site to Map';
+  btn.style.background=wip.checked?'var(--blue)':'var(--green)';
 }
 /* ── INSTALL AS DESKTOP APP ────────────── */
 let deferredInstall=null;
